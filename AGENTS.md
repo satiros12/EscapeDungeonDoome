@@ -5,12 +5,13 @@
 ### Stack
 - HTML5 Canvas + JavaScript vanilla
 - Raycasting para gráficos pseudo-3D (estilo DOOM)
+- Librería de raycasting: LodeV (https://lodev.org/cgtutor/raycasting.html)
 - Sin dependencias externas
 - Estructura simple: un único archivo HTML con CSS/JS embebido
 
 ### Normas de código
 1. Usa APIs modernas de Canvas y requestAnimationFrame
-2. Gráficos simplificados: paredes de un color, enemigos como sprites 2D
+2. Gráficos simplificados: paredes de colores sólidos, enemigos como sprites 2D
 3. Código conciso, sin sobreingeniería
 4. Commit tras cada fase completada
 5. Tests E2E con Playwright para verificar flujo de juego
@@ -28,6 +29,12 @@
 - **Daño al golpear**: 10 HP por golpe
 - **Rango de ataque**: distancia < 1.5 unidades
 - **Velocidad ataque**: 0.5 segundos de cooldown
+- **Velocidad movimiento**: media
+
+### Feedback visual
+- Flash rojo en pantalla cuando el jugador recibe daño
+- Enemigos muestran animación de muerte
+- Cadáver del enemigo permanece en el mapa tras morir
 
 ### Controles
 | Tecla | Acción |
@@ -49,7 +56,7 @@
 
 **Enemigo**
 ```
-{ x, y, angle, health: 30, state: 'patrol'|'chase'|'attack'|'dead' }
+{ x, y, angle, health: 30, state: 'patrol'|'chase'|'attack'|'dying'|'dead', deathTimer: 0 }
 ```
 
 **Mapa**: Array 2D de strings con caracteres:
