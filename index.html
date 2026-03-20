@@ -76,8 +76,8 @@
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
 
-    const SCREEN_WIDTH = 800;
-    const SCREEN_HEIGHT = 600;
+    let SCREEN_WIDTH = window.innerWidth;
+    let SCREEN_HEIGHT = window.innerHeight;
     const FOV = Math.PI / 3;
     const HALF_FOV = FOV / 2;
     const NUM_RAYS = 320;
@@ -125,6 +125,8 @@
     let kills = 0;
 
     function resizeCanvas() {
+        SCREEN_WIDTH = window.innerWidth;
+        SCREEN_HEIGHT = window.innerHeight;
         canvas.width = SCREEN_WIDTH;
         canvas.height = SCREEN_HEIGHT;
     }
