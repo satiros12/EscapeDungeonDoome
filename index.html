@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebDoom - FPS Melee</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #000; overflow: hidden; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        #menu, #victory, #defeat {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.9); color: #fff; font-family: 'Courier New', monospace;
+        }
+        #menu h1 { font-size: 4rem; color: #ff0000; text-shadow: 0 0 20px #ff0000; margin-bottom: 2rem; }
+        .btn {
+            padding: 1rem 3rem; font-size: 1.5rem; background: #ff0000; color: #fff;
+            border: none; cursor: pointer; font-family: inherit; pointer-events: auto;
+            transition: transform 0.1s;
+        }
+        .btn:hover { transform: scale(1.1); }
+        #hud {
+            position: absolute; bottom: 20px; left: 20px;
+            font-family: 'Courier New', monospace; color: #fff; font-size: 1.2rem;
+        }
+        #health-bar { width: 200px; height: 20px; background: #333; border: 2px solid #fff; }
+        #health-fill { height: 100%; background: #00ff00; transition: width 0.2s; }
+        #damage-flash {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,0,0,0.5); pointer-events: none; opacity: 0;
+        }
+        .hidden { display: none !important; }
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 20px; height: 20px; pointer-events: none;
+        }
+        #crosshair::before, #crosshair::after {
+            content: ''; position: absolute; background: #fff;
+        }
+        #crosshair::before { width: 2px; height: 20px; left: 9px; top: 0; }
+        #crosshair::after { width: 20px; height: 2px; left: 0; top: 9px; }
+    </style>
+</head>
+<body>
+    <canvas id="game"></canvas>
+    <div id="ui">
+        <div id="menu">
+            <h1>WEBDOOM</h1>
+            <button class="btn" id="startBtn">COMENZAR</button>
+        </div>
+        <div id="victory" class="hidden">
+            <h1 style="color: #00ff00;">VICTORIA</h1>
+            <p style="font-size: 1.5rem; margin: 1rem;">Has eliminado a todos los enemigos</p>
+            <button class="btn" id="victoryBtn">VOLVER AL MENÚ</button>
+        </div>
+        <div id="defeat" class="hidden">
+            <h1 style="color: #ff0000;">DERROTA</h1>
+            <p style="font-size: 1.5rem; margin: 1rem;">Has muerto</p>
+            <button class="btn" id="defeatBtn">VOLVER AL MENÚ</button>
+        </div>
+        <div id="hud" class="hidden">
+            <div>VIDA</div>
+            <div id="health-bar"><div id="health-fill" style="width: 100%;"></div></div>
+        </div>
+        <div id="crosshair" class="hidden"></div>
+        <div id="damage-flash"></div>
+    </div>
+    <script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    const SCREEN_WIDTH = 800;
+    const SCREEN_HEIGHT = 600;
+    const FOV = Math.PI / 3;
+    const HALF_FOV = FOV / 2;
+    const NUM_RAYS = 320;
+    const MAX_DEPTH = 16;
+    const TILE_SIZE = 1;
+
+    const MOVE_SPEED = 3;
+    const ROT_SPEED = 2;
+
+    const mapData = [
+        "################",
+        "#P.....#.......#",
+        "#.####.#.#####.#",
+        "#.#....#...#...#",
+        "#.#.#######.#.#",
+        "#.#........#.#.#",
+        "#.########.#.#.#",
+        "#........#.#.#.#",
+        "####.####.#.#...#",
+        "#E..#....#.#.### #",
+        "#.##.####.#.###.#",
+        "#....#....#.....#",
+        "#.####.######.###",
+        "#.#....#....#.E.#",
+        "#.#.##.####.#.###",
+        "#.....#....P#.E.#",
+        "################"
+    ];
+
+    const MAP_WIDTH = mapData[0].length;
+    const MAP_HEIGHT = mapData.length;
+
+    let gameState = 'menu';
+    let player = { x: 1.5, y: 1.5, angle: 0, health: 100, attackCooldown: 0 };
+    let enemies = [];
+    let keys = {};
+    let lastTime = 0;
+
+    function resizeCanvas() {
+        canvas.width = SCREEN_WIDTH;
+        canvas.height = SCREEN_HEIGHT;
+    }
+
+    function parseMap() {
+        player.x = 1.5; player.y = 1.5;
+        enemies = [];
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+            for (let x = 0; x < MAP_WIDTH; x++) {
+                const char = mapData[y][x];
+                if (char === 'P') { player.x = x + 0.5; player.y = y + 0.5; }
+                if (char === 'E') { enemies.push({ x: x + 0.5, y: y + 0.5, angle: 0, health: 30, state: 'patrol', patrolDir: Math.random() * Math.PI * 2, deathTimer: 0 }); }
+            }
+        }
+    }
+
+    function isWall(x, y) {
+        const mx = Math.floor(x);
+        const my = Math.floor(y);
+        if (mx < 0 || mx >= MAP_WIDTH || my < 0 || my >= MAP_HEIGHT) return true;
+        return mapData[my][mx] === '#';
+    }
+
+    function castRay(rayAngle) {
+        let sin = Math.sin(rayAngle);
+        let cos = Math.cos(rayAngle);
+        if (Math.abs(sin) < 0.0001) sin = 0.0001;
+        if (Math.abs(cos) < 0.0001) cos = 0.0001;
+
+        let dist = 0;
+        const step = 0.02;
+        while (dist < MAX_DEPTH) {
+            dist += step;
+            const testX = player.x + cos * dist;
+            const testY = player.y + sin * dist;
+            if (isWall(testX, testY)) {
+                let side = 0;
+                const mx = Math.floor(testX);
+                const my = Math.floor(testY);
+                if (mx !== Math.floor(player.x + cos * (dist - step))) side = 1;
+                return { dist, side };
+            }
+        }
+        return { dist: MAX_DEPTH, side: 0 };
+    }
+
+    function renderWalls() {
+        const stripWidth = SCREEN_WIDTH / NUM_RAYS;
+        for (let i = 0; i < NUM_RAYS; i++) {
+            const rayAngle = player.angle - HALF_FOV + (i / NUM_RAYS) * FOV;
+            const { dist, side } = castRay(rayAngle);
+            const correctedDist = dist * Math.cos(rayAngle - player.angle);
+            const wallHeight = Math.min(SCREEN_HEIGHT * 2, SCREEN_HEIGHT / correctedDist);
+            const brightness = Math.max(0.3, 1 - correctedDist / MAX_DEPTH);
+            const color = side === 0 ? [brightness * 255, brightness * 200, brightness * 180] : [brightness * 180, brightness * 160, brightness * 140];
+            ctx.fillStyle = `rgb(${color[0]},${color[1]},${color[2]})`;
+            ctx.fillRect(i * stripWidth, (SCREEN_HEIGHT - wallHeight) / 2, stripWidth + 1, wallHeight);
+        }
+    }
+
+    function renderFloor() {
+        const gradient = ctx.createLinearGradient(0, SCREEN_HEIGHT / 2, 0, SCREEN_HEIGHT);
+        gradient.addColorStop(0, '#1a1a1a');
+        gradient.addColorStop(1, '#0a0a0a');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, SCREEN_HEIGHT / 2, SCREEN_WIDTH, SCREEN_HEIGHT / 2);
+    }
+
+    function renderCeiling() {
+        ctx.fillStyle = '#111';
+        ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT / 2);
+    }
+
+    function movePlayer(dt) {
+        let moveX = 0, moveY = 0;
+        if (keys['KeyW'] || keys['ArrowUp']) { moveX += Math.cos(player.angle) * MOVE_SPEED * dt; moveY += Math.sin(player.angle) * MOVE_SPEED * dt; }
+        if (keys['KeyS']) { moveX -= Math.cos(player.angle) * MOVE_SPEED * dt; moveY -= Math.sin(player.angle) * MOVE_SPEED * dt; }
+        if (keys['KeyA']) { moveX += Math.cos(player.angle - Math.PI / 2) * MOVE_SPEED * dt; moveY += Math.sin(player.angle - Math.PI / 2) * MOVE_SPEED * dt; }
+        if (keys['KeyD']) { moveX += Math.cos(player.angle + Math.PI / 2) * MOVE_SPEED * dt; moveY += Math.sin(player.angle + Math.PI / 2) * MOVE_SPEED * dt; }
+        if (keys['ArrowLeft']) player.angle -= ROT_SPEED * dt;
+        if (keys['ArrowRight']) player.angle += ROT_SPEED * dt;
+
+        if (!isWall(player.x + moveX, player.y)) player.x += moveX;
+        if (!isWall(player.x, player.y + moveY)) player.y += moveY;
+
+        if (player.attackCooldown > 0) player.attackCooldown -= dt;
+    }
+
+    function updateEnemies(dt) {
+        enemies.forEach(enemy => {
+            if (enemy.state === 'dead') return;
+            if (enemy.state === 'dying') {
+                enemy.deathTimer -= dt;
+                if (enemy.deathTimer <= 0) enemy.state = 'dead';
+                return;
+            }
+            const dx = player.x - enemy.x;
+            const dy = player.y - enemy.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const angleToPlayer = Math.atan2(dy, dx);
+            let angleDiff = angleToPlayer - enemy.angle;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+            if (enemy.state === 'patrol') {
+                enemy.x += Math.cos(enemy.patrolDir) * 1 * dt;
+                enemy.y += Math.sin(enemy.patrolDir) * 1 * dt;
+                if (isWall(enemy.x + Math.cos(enemy.patrolDir) * 0.5, enemy.y + Math.sin(enemy.patrolDir) * 0.5)) {
+                    enemy.patrolDir += Math.PI / 2 + Math.random() * Math.PI;
+                }
+                if (dist < 5 && Math.abs(angleDiff) < Math.PI / 4) {
+                    enemy.state = 'chase';
+                }
+            } else if (enemy.state === 'chase') {
+                if (dist > 1.2) {
+                    enemy.angle = angleToPlayer;
+                    const ex = enemy.x + Math.cos(enemy.angle) * 2 * dt;
+                    const ey = enemy.y + Math.sin(enemy.angle) * 2 * dt;
+                    if (!isWall(ex, enemy.y)) enemy.x = ex;
+                    if (!isWall(enemy.x, ey)) enemy.y = ey;
+                } else if (dist < 1.5) {
+                    enemy.state = 'attack';
+                }
+                if (dist > 8) enemy.state = 'patrol';
+            } else if (enemy.state === 'attack') {
+                if (dist > 1.5) {
+                    enemy.state = 'chase';
+                }
+            }
+        });
+    }
+
+    function renderSprites() {
+        const visibleEnemies = enemies.filter(e => e.state !== 'dead').map(enemy => {
+            const dx = enemy.x - player.x;
+            const dy = enemy.y - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const angleToEnemy = Math.atan2(dy, dx);
+            let angleDiff = angleToEnemy - player.angle;
+            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            return { ...enemy, dist, angleDiff };
+        }).filter(e => Math.abs(e.angleDiff) < HALF_FOV + 0.2 && e.dist < MAX_DEPTH);
+
+        visibleEnemies.sort((a, b) => b.dist - a.dist);
+
+        visibleEnemies.forEach(enemy => {
+            const screenX = SCREEN_WIDTH / 2 + (enemy.angleDiff / HALF_FOV) * (SCREEN_WIDTH / 2);
+            const size = Math.min(400, SCREEN_HEIGHT / enemy.dist * 0.5);
+            const screenY = SCREEN_HEIGHT / 2;
+
+            if (enemy.state === 'dying') {
+                ctx.fillStyle = '#660000';
+            } else {
+                ctx.fillStyle = enemy.state === 'chase' || enemy.state === 'attack' ? '#ff0000' : '#aa3333';
+            }
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, size / 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(screenX - size / 6, screenY - size / 6, size / 10, 0, Math.PI * 2);
+            ctx.arc(screenX + size / 6, screenY - size / 6, size / 10, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+
+    function showDamageFlash() {
+        const flash = document.getElementById('damage-flash');
+        flash.style.opacity = 1;
+        setTimeout(() => flash.style.opacity = 0, 100);
+    }
+
+    function updateHUD() {
+        const fill = document.getElementById('health-fill');
+        fill.style.width = player.health + '%';
+        fill.style.background = player.health > 50 ? '#00ff00' : player.health > 25 ? '#ffff00' : '#ff0000';
+    }
+
+    function gameLoop(timestamp) {
+        const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
+        lastTime = timestamp;
+
+        if (gameState === 'playing') {
+            movePlayer(dt);
+            updateEnemies(dt);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+            renderCeiling();
+            renderFloor();
+            renderWalls();
+            renderSprites();
+            updateHUD();
+        }
+        requestAnimationFrame(gameLoop);
+    }
+
+    function startGame() {
+        parseMap();
+        player.health = 100;
+        player.attackCooldown = 0;
+        gameState = 'playing';
+        document.getElementById('menu').classList.add('hidden');
+        document.getElementById('victory').classList.add('hidden');
+        document.getElementById('defeat').classList.add('hidden');
+        document.getElementById('hud').classList.remove('hidden');
+        document.getElementById('crosshair').classList.remove('hidden');
+        log('Game started');
+    }
+
+    function showVictory() {
+        gameState = 'victory';
+        document.getElementById('hud').classList.add('hidden');
+        document.getElementById('crosshair').classList.add('hidden');
+        document.getElementById('victory').classList.remove('hidden');
+        log('Victory - all enemies killed');
+    }
+
+    function showDefeat() {
+        gameState = 'defeat';
+        document.getElementById('hud').classList.add('hidden');
+        document.getElementById('crosshair').classList.add('hidden');
+        document.getElementById('defeat').classList.remove('hidden');
+        log('Defeat - player died');
+    }
+
+    function log(msg) {
+        console.log(msg);
+        const entry = `[${new Date().toISOString()}] ${msg}\n`;
+    }
+
+    document.addEventListener('keydown', e => {
+        keys[e.code] = true;
+        if (e.code === 'Space' && gameState === 'playing' && player.attackCooldown <= 0) {
+            player.attackCooldown = 0.5;
+            enemies.forEach(enemy => {
+                if (enemy.state === 'dying' || enemy.state === 'dead') return;
+                const dx = enemy.x - player.x;
+                const dy = enemy.y - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 1.5) {
+                    enemy.health -= 10;
+                    log(`Player hits enemy at distance ${dist.toFixed(2)}`);
+                    if (enemy.health <= 0) {
+                        enemy.state = 'dying';
+                        enemy.deathTimer = 1;
+                        log('Enemy dying');
+                    }
+                }
+            });
+        }
+        if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+            e.preventDefault();
+        }
+    });
+
+    document.addEventListener('keyup', e => keys[e.code] = false);
+
+    document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('victoryBtn').addEventListener('click', () => { document.getElementById('victory').classList.add('hidden'); document.getElementById('menu').classList.remove('hidden'); gameState = 'menu'; });
+    document.getElementById('defeatBtn').addEventListener('click', () => { document.getElementById('defeat').classList.add('hidden'); document.getElementById('menu').classList.remove('hidden'); gameState = 'menu'; });
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    parseMap();
+    requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
