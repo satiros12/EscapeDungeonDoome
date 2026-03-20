@@ -10,13 +10,22 @@ let server;
 async function startServer() {
     return new Promise((resolve, reject) => {
         server = spawn('python3', ['server.py'], {
-            cwd: path.join(__dirname),
+            cwd: path.join(__dirname, '..'),
             stdio: ['pipe', 'pipe', 'pipe']
         });
         server.on('error', reject);
-        setTimeout(() => {
-            require('http').get(BASE_URL, (res) => resolve()).on('error', () => setTimeout(resolve, 2000));
-        }, 500);
+        let attempts = 0;
+        const check = () => {
+            require('http').get(BASE_URL, (res) => {
+                if (res.statusCode === 200) resolve();
+                else setTimeout(check, 500);
+            }).on('error', () => {
+                attempts++;
+                if (attempts < 10) setTimeout(check, 500);
+                else resolve();
+            });
+        };
+        setTimeout(check, 1000);
     });
 }
 
