@@ -87,26 +87,25 @@
     const ROT_SPEED = 2;
     const ATTACK_RANGE = 1.5;
     const ATTACK_COOLDOWN = 0.5;
-    const ENEMY_SPEED = 2;
-    const DETECTION_RANGE = 5;
-    const DETECTION_ANGLE = Math.PI / 4;
+    const ENEMY_SPEED = 2.5;
+    const DETECTION_RANGE = 8;
     const ENEMY_ATTACK_RANGE = 1.3;
     const ENEMY_ATTACK_COOLDOWN = 1;
 
     const mapData = [
         "################",
         "#              #",
-        "#   E          #",
-        "#              #",
-        "#      P       #",
+        "#   E    #     #",
+        "#        #     #",
+        "#      ###     #",
+        "#      # P     #",
         "#          E   #",
-        "#              #",
-        "#              #",
-        "#              #",
-        "#              #",
-        "#              #",
-        "#              #",
-        "#          E   #",
+        "#    ###      #",
+        "#    #        #",
+        "#    #    #   #",
+        "#        #    #",
+        "#   ###       #",
+        "#          E  #",
         "#              #",
         "#              #",
         "################"
@@ -261,7 +260,7 @@
                 if (isWall(enemy.x + Math.cos(enemy.patrolDir) * 0.5, enemy.y + Math.sin(enemy.patrolDir) * 0.5)) {
                     enemy.patrolDir += Math.PI / 2 + Math.random() * Math.PI;
                 }
-                if (canSeePlayer && Math.abs(angleDiff) < DETECTION_ANGLE) {
+                if (canSeePlayer && dist < DETECTION_RANGE) {
                     enemy.state = 'chase';
                     log(`Enemy spotted player at distance ${dist.toFixed(2)}`);
                 }
@@ -275,7 +274,7 @@
                 } else {
                     enemy.state = 'attack';
                 }
-                if (!canSeePlayer && dist > 8) {
+                if (!canSeePlayer && dist > 12) {
                     enemy.state = 'patrol';
                     log('Enemy lost player, returning to patrol');
                 }
