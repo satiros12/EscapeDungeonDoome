@@ -41,6 +41,10 @@
         }
         #crosshair::before { width: 2px; height: 20px; left: 9px; top: 0; }
         #crosshair::after { width: 20px; height: 2px; left: 0; top: 9px; }
+        #kill-count {
+            position: absolute; top: 20px; right: 20px;
+            font-family: 'Courier New', monospace; color: #fff; font-size: 1.2rem;
+        }
     </style>
 </head>
 <body>
@@ -61,9 +65,10 @@
             <button class="btn" id="defeatBtn">VOLVER AL MENÚ</button>
         </div>
         <div id="hud" class="hidden">
-            <div>VIDA</div>
+            <div id="health-label">VIDA</div>
             <div id="health-bar"><div id="health-fill" style="width: 100%;"></div></div>
         </div>
+        <div id="kill-count" class="hidden">ENEMIGOS: <span id="kills">0</span>/3</div>
         <div id="crosshair" class="hidden"></div>
         <div id="damage-flash"></div>
     </div>
@@ -77,10 +82,16 @@
     const HALF_FOV = FOV / 2;
     const NUM_RAYS = 320;
     const MAX_DEPTH = 16;
-    const TILE_SIZE = 1;
 
     const MOVE_SPEED = 3;
     const ROT_SPEED = 2;
+    const ATTACK_RANGE = 1.5;
+    const ATTACK_COOLDOWN = 0.5;
+    const ENEMY_SPEED = 2;
+    const DETECTION_RANGE = 5;
+    const DETECTION_ANGLE = Math.PI / 4;
+    const ENEMY_ATTACK_RANGE = 1.3;
+    const ENEMY_ATTACK_COOLDOWN = 1;
 
     const mapData = [
         "################",
@@ -110,6 +121,8 @@
     let enemies = [];
     let keys = {};
     let lastTime = 0;
+    let corpses = [];
+    let kills = 0;
 
     function resizeCanvas() {
         canvas.width = SCREEN_WIDTH;
@@ -119,11 +132,22 @@
     function parseMap() {
         player.x = 1.5; player.y = 1.5;
         enemies = [];
+        corpses = [];
+        kills = 0;
+        document.getElementById('kills').textContent = '0';
         for (let y = 0; y < MAP_HEIGHT; y++) {
             for (let x = 0; x < MAP_WIDTH; x++) {
                 const char = mapData[y][x];
                 if (char === 'P') { player.x = x + 0.5; player.y = y + 0.5; }
-                if (char === 'E') { enemies.push({ x: x + 0.5, y: y + 0.5, angle: 0, health: 30, state: 'patrol', patrolDir: Math.random() * Math.PI * 2, deathTimer: 0 }); }
+                if (char === 'E') { 
+                    enemies.push({ 
+                        x: x + 0.5, y: y + 0.5, angle: Math.random() * Math.PI * 2, 
+                        health: 30, state: 'patrol', 
+                        patrolDir: Math.random() * Math.PI * 2, 
+                        deathTimer: 0, attackCooldown: 0,
+                        dyingProgress: 0
+                    }); 
+                }
             }
         }
     }
@@ -133,6 +157,18 @@
         const my = Math.floor(y);
         if (mx < 0 || mx >= MAP_WIDTH || my < 0 || my >= MAP_HEIGHT) return true;
         return mapData[my][mx] === '#';
+    }
+
+    function hasLineOfSight(x1, y1, x2, y2) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const steps = Math.ceil(dist * 10);
+        for (let i = 0; i < steps; i++) {
+            const t = i / steps;
+            if (isWall(x1 + dx * t, y1 + dy * t)) return false;
+        }
+        return true;
     }
 
     function castRay(rayAngle) {
@@ -187,7 +223,7 @@
 
     function movePlayer(dt) {
         let moveX = 0, moveY = 0;
-        if (keys['KeyW'] || keys['ArrowUp']) { moveX += Math.cos(player.angle) * MOVE_SPEED * dt; moveY += Math.sin(player.angle) * MOVE_SPEED * dt; }
+        if (keys['KeyW']) { moveX += Math.cos(player.angle) * MOVE_SPEED * dt; moveY += Math.sin(player.angle) * MOVE_SPEED * dt; }
         if (keys['KeyS']) { moveX -= Math.cos(player.angle) * MOVE_SPEED * dt; moveY -= Math.sin(player.angle) * MOVE_SPEED * dt; }
         if (keys['KeyA']) { moveX += Math.cos(player.angle - Math.PI / 2) * MOVE_SPEED * dt; moveY += Math.sin(player.angle - Math.PI / 2) * MOVE_SPEED * dt; }
         if (keys['KeyD']) { moveX += Math.cos(player.angle + Math.PI / 2) * MOVE_SPEED * dt; moveY += Math.sin(player.angle + Math.PI / 2) * MOVE_SPEED * dt; }
@@ -196,25 +232,24 @@
 
         if (!isWall(player.x + moveX, player.y)) player.x += moveX;
         if (!isWall(player.x, player.y + moveY)) player.y += moveY;
+    }
 
-        if (player.attackCooldown > 0) player.attackCooldown -= dt;
+    function normalizeAngle(angle) {
+        while (angle > Math.PI) angle -= Math.PI * 2;
+        while (angle < -Math.PI) angle += Math.PI * 2;
+        return angle;
     }
 
     function updateEnemies(dt) {
-        enemies.forEach(enemy => {
-            if (enemy.state === 'dead') return;
-            if (enemy.state === 'dying') {
-                enemy.deathTimer -= dt;
-                if (enemy.deathTimer <= 0) enemy.state = 'dead';
-                return;
-            }
+        const aliveEnemies = enemies.filter(e => e.state !== 'dead' && e.state !== 'dying');
+        
+        aliveEnemies.forEach(enemy => {
             const dx = player.x - enemy.x;
             const dy = player.y - enemy.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
             const angleToPlayer = Math.atan2(dy, dx);
-            let angleDiff = angleToPlayer - enemy.angle;
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+            let angleDiff = normalizeAngle(angleToPlayer - enemy.angle);
+            const canSeePlayer = dist < DETECTION_RANGE && hasLineOfSight(enemy.x, enemy.y, player.x, player.y);
 
             if (enemy.state === 'patrol') {
                 enemy.x += Math.cos(enemy.patrolDir) * 1 * dt;
@@ -222,74 +257,162 @@
                 if (isWall(enemy.x + Math.cos(enemy.patrolDir) * 0.5, enemy.y + Math.sin(enemy.patrolDir) * 0.5)) {
                     enemy.patrolDir += Math.PI / 2 + Math.random() * Math.PI;
                 }
-                if (dist < 5 && Math.abs(angleDiff) < Math.PI / 4) {
+                if (canSeePlayer && Math.abs(angleDiff) < DETECTION_ANGLE) {
                     enemy.state = 'chase';
+                    log(`Enemy spotted player at distance ${dist.toFixed(2)}`);
                 }
             } else if (enemy.state === 'chase') {
-                if (dist > 1.2) {
+                if (dist > ENEMY_ATTACK_RANGE) {
                     enemy.angle = angleToPlayer;
-                    const ex = enemy.x + Math.cos(enemy.angle) * 2 * dt;
-                    const ey = enemy.y + Math.sin(enemy.angle) * 2 * dt;
+                    const ex = enemy.x + Math.cos(enemy.angle) * ENEMY_SPEED * dt;
+                    const ey = enemy.y + Math.sin(enemy.angle) * ENEMY_SPEED * dt;
                     if (!isWall(ex, enemy.y)) enemy.x = ex;
                     if (!isWall(enemy.x, ey)) enemy.y = ey;
-                } else if (dist < 1.5) {
+                } else {
                     enemy.state = 'attack';
                 }
-                if (dist > 8) enemy.state = 'patrol';
+                if (!canSeePlayer && dist > 8) {
+                    enemy.state = 'patrol';
+                    log('Enemy lost player, returning to patrol');
+                }
             } else if (enemy.state === 'attack') {
-                if (dist > 1.5) {
+                if (dist > ENEMY_ATTACK_RANGE + 0.5) {
                     enemy.state = 'chase';
+                } else if (enemy.attackCooldown <= 0 && dist <= ENEMY_ATTACK_RANGE) {
+                    enemy.attackCooldown = ENEMY_ATTACK_COOLDOWN;
+                    player.health -= 10;
+                    showDamageFlash();
+                    log(`Enemy attacks! Player health: ${player.health}`);
+                    if (player.health <= 0) {
+                        showDefeat();
+                    }
                 }
             }
+
+            if (enemy.attackCooldown > 0) enemy.attackCooldown -= dt;
         });
     }
 
     function renderSprites() {
-        const visibleEnemies = enemies.filter(e => e.state !== 'dead').map(enemy => {
+        const sprites = [];
+
+        enemies.forEach(enemy => {
+            if (enemy.state === 'dead') return;
             const dx = enemy.x - player.x;
             const dy = enemy.y - player.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
             const angleToEnemy = Math.atan2(dy, dx);
-            let angleDiff = angleToEnemy - player.angle;
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            return { ...enemy, dist, angleDiff };
-        }).filter(e => Math.abs(e.angleDiff) < HALF_FOV + 0.2 && e.dist < MAX_DEPTH);
+            let angleDiff = normalizeAngle(angleToEnemy - player.angle);
+            if (Math.abs(angleDiff) < HALF_FOV + 0.2 && dist < MAX_DEPTH) {
+                sprites.push({ ...enemy, dist, angleDiff, isEnemy: true });
+            }
+        });
 
-        visibleEnemies.sort((a, b) => b.dist - a.dist);
+        corpses.forEach(corpse => {
+            const dx = corpse.x - player.x;
+            const dy = corpse.y - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const angleToCorpse = Math.atan2(dy, dx);
+            const angleDiff = normalizeAngle(angleToCorpse - player.angle);
+            if (Math.abs(angleDiff) < HALF_FOV + 0.2 && dist < MAX_DEPTH) {
+                sprites.push({ x: corpse.x, y: corpse.y, dist, angleDiff, isEnemy: false, isCorpse: true });
+            }
+        });
 
-        visibleEnemies.forEach(enemy => {
-            const screenX = SCREEN_WIDTH / 2 + (enemy.angleDiff / HALF_FOV) * (SCREEN_WIDTH / 2);
-            const size = Math.min(400, SCREEN_HEIGHT / enemy.dist * 0.5);
+        sprites.sort((a, b) => b.dist - a.dist);
+
+        sprites.forEach(sprite => {
+            const screenX = SCREEN_WIDTH / 2 + (sprite.angleDiff / HALF_FOV) * (SCREEN_WIDTH / 2);
+            const size = Math.min(400, SCREEN_HEIGHT / sprite.dist * 0.6);
             const screenY = SCREEN_HEIGHT / 2;
 
-            if (enemy.state === 'dying') {
-                ctx.fillStyle = '#660000';
+            if (sprite.isCorpse) {
+                ctx.fillStyle = '#440000';
+                ctx.beginPath();
+                ctx.arc(screenX, screenY + size * 0.3, size / 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#220000';
+                ctx.fillRect(screenX - size / 2, screenY, size, size / 4);
+            } else if (sprite.state === 'dying') {
+                sprite.dyingProgress = Math.min(1, sprite.dyingProgress + 0.02);
+                const alpha = 1 - sprite.dyingProgress;
+                ctx.fillStyle = `rgba(102, 0, 0, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, size / 2 * (1 + sprite.dyingProgress * 0.3), 0, Math.PI * 2);
+                ctx.fill();
             } else {
-                ctx.fillStyle = enemy.state === 'chase' || enemy.state === 'attack' ? '#ff0000' : '#aa3333';
-            }
-            ctx.beginPath();
-            ctx.arc(screenX, screenY, size / 2, 0, Math.PI * 2);
-            ctx.fill();
+                const color = sprite.state === 'chase' || sprite.state === 'attack' ? '#ff2222' : '#aa3333';
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, size / 2, 0, Math.PI * 2);
+                ctx.fill();
 
-            ctx.fillStyle = '#000';
-            ctx.beginPath();
-            ctx.arc(screenX - size / 6, screenY - size / 6, size / 10, 0, Math.PI * 2);
-            ctx.arc(screenX + size / 6, screenY - size / 6, size / 10, 0, Math.PI * 2);
-            ctx.fill();
+                ctx.fillStyle = '#000';
+                ctx.beginPath();
+                ctx.arc(screenX - size / 6, screenY - size / 6, size / 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (sprite.state === 'attack') {
+                    ctx.fillStyle = '#ff0000';
+                    ctx.beginPath();
+                    ctx.moveTo(screenX + size / 2, screenY);
+                    ctx.lineTo(screenX + size / 2 + 20, screenY - 10);
+                    ctx.lineTo(screenX + size / 2 + 20, screenY + 10);
+                    ctx.fill();
+                }
+            }
         });
     }
 
     function showDamageFlash() {
         const flash = document.getElementById('damage-flash');
         flash.style.opacity = 1;
-        setTimeout(() => flash.style.opacity = 0, 100);
+        setTimeout(() => flash.style.opacity = 0, 150);
     }
 
     function updateHUD() {
         const fill = document.getElementById('health-fill');
-        fill.style.width = player.health + '%';
+        fill.style.width = Math.max(0, player.health) + '%';
         fill.style.background = player.health > 50 ? '#00ff00' : player.health > 25 ? '#ffff00' : '#ff0000';
+    }
+
+    function playerAttack() {
+        if (player.attackCooldown > 0) return;
+        player.attackCooldown = ATTACK_COOLDOWN;
+
+        let hitEnemy = false;
+        enemies.forEach(enemy => {
+            if (enemy.state === 'dying' || enemy.state === 'dead') return;
+            const dx = enemy.x - player.x;
+            const dy = enemy.y - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < ATTACK_RANGE) {
+                enemy.health -= 10;
+                hitEnemy = true;
+                log(`Player hits enemy! Enemy health: ${enemy.health} (dist: ${dist.toFixed(2)})`);
+                if (enemy.health <= 0) {
+                    enemy.state = 'dying';
+                    enemy.dyingProgress = 0;
+                    log('Enemy entering dying state');
+                }
+            }
+        });
+    }
+
+    function checkDeadEnemies() {
+        enemies.forEach(enemy => {
+            if (enemy.state === 'dying' && enemy.dyingProgress >= 1) {
+                enemy.state = 'dead';
+                corpses.push({ x: enemy.x, y: enemy.y });
+                kills++;
+                document.getElementById('kills').textContent = kills;
+                log(`Enemy dead. Corpses: ${corpses.length}`);
+                const aliveEnemies = enemies.filter(e => e.state !== 'dead');
+                if (aliveEnemies.length === 0) {
+                    setTimeout(() => showVictory(), 500);
+                }
+            }
+        });
     }
 
     function gameLoop(timestamp) {
@@ -299,6 +422,7 @@
         if (gameState === 'playing') {
             movePlayer(dt);
             updateEnemies(dt);
+            checkDeadEnemies();
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
             renderCeiling();
@@ -320,49 +444,40 @@
         document.getElementById('defeat').classList.add('hidden');
         document.getElementById('hud').classList.remove('hidden');
         document.getElementById('crosshair').classList.remove('hidden');
+        document.getElementById('kill-count').classList.remove('hidden');
         log('Game started');
     }
 
     function showVictory() {
+        if (gameState !== 'playing') return;
         gameState = 'victory';
         document.getElementById('hud').classList.add('hidden');
         document.getElementById('crosshair').classList.add('hidden');
+        document.getElementById('kill-count').classList.add('hidden');
         document.getElementById('victory').classList.remove('hidden');
-        log('Victory - all enemies killed');
+        log('VICTORY - All enemies eliminated');
     }
 
     function showDefeat() {
+        if (gameState !== 'playing') return;
         gameState = 'defeat';
         document.getElementById('hud').classList.add('hidden');
         document.getElementById('crosshair').classList.add('hidden');
+        document.getElementById('kill-count').classList.add('hidden');
         document.getElementById('defeat').classList.remove('hidden');
-        log('Defeat - player died');
+        log('DEFEAT - Player died');
     }
 
     function log(msg) {
         console.log(msg);
-        const entry = `[${new Date().toISOString()}] ${msg}\n`;
+        fetch('/log', { method: 'POST', body: JSON.stringify({ msg, time: new Date().toISOString() }) }).catch(() => {});
     }
 
     document.addEventListener('keydown', e => {
         keys[e.code] = true;
-        if (e.code === 'Space' && gameState === 'playing' && player.attackCooldown <= 0) {
-            player.attackCooldown = 0.5;
-            enemies.forEach(enemy => {
-                if (enemy.state === 'dying' || enemy.state === 'dead') return;
-                const dx = enemy.x - player.x;
-                const dy = enemy.y - player.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < 1.5) {
-                    enemy.health -= 10;
-                    log(`Player hits enemy at distance ${dist.toFixed(2)}`);
-                    if (enemy.health <= 0) {
-                        enemy.state = 'dying';
-                        enemy.deathTimer = 1;
-                        log('Enemy dying');
-                    }
-                }
-            });
+        if (e.code === 'Space' && gameState === 'playing') {
+            e.preventDefault();
+            playerAttack();
         }
         if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
             e.preventDefault();
