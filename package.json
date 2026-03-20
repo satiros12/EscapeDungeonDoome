@@ -1,0 +1,12 @@
+{
+  "name": "webdoom",
+  "version": "1.0.0",
+  "description": "WebDoom MVP - FPS Melee",
+  "scripts": {
+    "start": "python3 server.py",
+    "test": "node tests/game.test.js"
+  },
+  "dependencies": {
+    "playwright": "^1.58.2"
+  }
+}
