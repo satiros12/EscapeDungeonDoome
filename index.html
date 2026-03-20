@@ -96,17 +96,17 @@
     const mapData = [
         "################",
         "#              #",
+        "#   E          #",
         "#              #",
-        "#              #",
-        "#      P  E    #",
-        "#              #",
-        "#              #",
-        "#              #",
-        "#              #",
+        "#      P       #",
+        "#          E   #",
         "#              #",
         "#              #",
         "#              #",
         "#              #",
+        "#              #",
+        "#              #",
+        "#          E   #",
         "#              #",
         "#              #",
         "################"
@@ -338,7 +338,6 @@
                 ctx.fillStyle = '#220000';
                 ctx.fillRect(screenX - size / 2, screenY, size, size / 4);
             } else if (sprite.state === 'dying') {
-                sprite.dyingProgress = Math.min(1, sprite.dyingProgress + 0.02);
                 const alpha = 1 - sprite.dyingProgress;
                 ctx.fillStyle = `rgba(102, 0, 0, ${alpha})`;
                 ctx.beginPath();
@@ -436,17 +435,20 @@
         });
     }
 
-    function checkDeadEnemies() {
+    function updateDyingEnemies(dt) {
         enemies.forEach(enemy => {
-            if (enemy.state === 'dying' && enemy.dyingProgress >= 1) {
-                enemy.state = 'dead';
-                corpses.push({ x: enemy.x, y: enemy.y });
-                kills++;
-                document.getElementById('kills').textContent = kills;
-                log(`Enemy dead. Corpses: ${corpses.length}`);
-                const aliveEnemies = enemies.filter(e => e.state !== 'dead');
-                if (aliveEnemies.length === 0) {
-                    setTimeout(() => showVictory(), 500);
+            if (enemy.state === 'dying') {
+                enemy.dyingProgress += dt;
+                if (enemy.dyingProgress >= 1) {
+                    enemy.state = 'dead';
+                    corpses.push({ x: enemy.x, y: enemy.y });
+                    kills++;
+                    document.getElementById('kills').textContent = `${kills}/3`;
+                    log(`Enemy dead. Corpses: ${corpses.length}`);
+                    const aliveEnemies = enemies.filter(e => e.state !== 'dead');
+                    if (aliveEnemies.length === 0) {
+                        setTimeout(() => showVictory(), 500);
+                    }
                 }
             }
         });
@@ -459,7 +461,7 @@
         if (gameState === 'playing') {
             movePlayer(dt);
             updateEnemies(dt);
-            checkDeadEnemies();
+            updateDyingEnemies(dt);
             updateHitEffects(dt);
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
