@@ -95,20 +95,20 @@
 
     const mapData = [
         "################",
-        "#P            E#",
-        "#   #######    #",
-        "#   #     #    #",
-        "#   #  P  #  E #",
-        "#   #     #    #",
-        "#   #######    #",
         "#              #",
-        "#    #####     #",
-        "#    #   #     #",
-        "#    #     ### #",
-        "#    #        E#",
-        "#    ######### #",
         "#              #",
-        "################",
+        "#              #",
+        "#      P  E    #",
+        "#              #",
+        "#              #",
+        "#              #",
+        "#              #",
+        "#              #",
+        "#              #",
+        "#              #",
+        "#              #",
+        "#              #",
+        "#              #",
         "################"
     ];
 
@@ -122,6 +122,7 @@
     let lastTime = 0;
     let corpses = [];
     let kills = 0;
+    let hitEffects = [];
 
     function resizeCanvas() {
         SCREEN_WIDTH = window.innerWidth;
@@ -390,12 +391,45 @@
             if (dist < ATTACK_RANGE) {
                 enemy.health -= 10;
                 hitEnemy = true;
+                hitEffects.push({ x: enemy.x, y: enemy.y, timer: 0.3 });
                 log(`Player hits enemy! Enemy health: ${enemy.health} (dist: ${dist.toFixed(2)})`);
                 if (enemy.health <= 0) {
                     enemy.state = 'dying';
                     enemy.dyingProgress = 0;
                     log('Enemy entering dying state');
                 }
+            }
+        });
+    }
+
+    function updateHitEffects(dt) {
+        hitEffects = hitEffects.filter(e => {
+            e.timer -= dt;
+            return e.timer > 0;
+        });
+    }
+
+    function renderHitEffects() {
+        hitEffects.forEach(effect => {
+            const dx = effect.x - player.x;
+            const dy = effect.y - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const angleToEffect = Math.atan2(dy, dx);
+            const angleDiff = normalizeAngle(angleToEffect - player.angle);
+            if (Math.abs(angleDiff) < HALF_FOV + 0.2 && dist < MAX_DEPTH) {
+                const screenX = SCREEN_WIDTH / 2 + (angleDiff / HALF_FOV) * (SCREEN_WIDTH / 2);
+                const size = Math.min(100, SCREEN_HEIGHT / dist * 0.15);
+                const screenY = SCREEN_HEIGHT / 2;
+                const alpha = effect.timer / 0.3;
+                ctx.strokeStyle = `rgba(255, 255, 0, ${alpha})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, size, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.fillStyle = `rgba(255, 255, 0, ${alpha})`;
+                ctx.font = `${size}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.fillText('HIT!', screenX, screenY - size - 5);
             }
         });
     }
@@ -424,12 +458,14 @@
             movePlayer(dt);
             updateEnemies(dt);
             checkDeadEnemies();
+            updateHitEffects(dt);
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
             renderCeiling();
             renderFloor();
             renderWalls();
             renderSprites();
+            renderHitEffects();
             updateHUD();
         }
         requestAnimationFrame(gameLoop);
