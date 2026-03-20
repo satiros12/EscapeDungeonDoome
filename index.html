@@ -234,6 +234,8 @@
 
         if (!isWall(player.x + moveX, player.y)) player.x += moveX;
         if (!isWall(player.x, player.y + moveY)) player.y += moveY;
+
+        if (player.attackCooldown > 0) player.attackCooldown -= dt;
     }
 
     function normalizeAngle(angle) {
