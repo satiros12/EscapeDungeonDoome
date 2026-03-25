@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
 """WebDoom MVP - HTTP + WebSocket Server with Game Loop"""
 
-import asyncio
-import argparse
-import http.server
-import socketserver
 import os
 import json
 import threading
 from datetime import datetime
 import websockets
+import argparse
+import http.server
+import socketserver
+import asyncio
+
+PROJECT_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
+os.chdir(PROJECT_ROOT)
+
 from game_state import GameState, GameConfig
 from game_logic import GameLogic
 
-LOG_FILE = "game.log"
+LOG_FILE = os.path.join(PROJECT_ROOT, "game.log")
 
 
 class LogHandler(http.server.SimpleHTTPRequestHandler):
@@ -237,8 +243,46 @@ class GameServer:
 
     def run_http_server(self):
         """Run HTTP server in separate thread"""
+        public_dir = os.path.join(PROJECT_ROOT, "public")
+
+        import http.server
+
+        class PublicDirHandler(http.server.SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, directory=public_dir, **kwargs)
+
+            def end_headers(self):
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                super().end_headers()
+
+            def log_message(self, format, *args):
+                pass
+
+            def do_POST(self):
+                if self.path == "/log":
+                    content_length = int(self.headers["Content-Length"])
+                    post_data = self.rfile.read(content_length)
+                    try:
+                        data = json.loads(post_data.decode("utf-8"))
+                        entry = f"[{data['time']}] {data['msg']}\n"
+                        with open(LOG_FILE, "a") as f:
+                            f.write(entry)
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.end_headers()
+                        self.wfile.write(b'{"status":"ok"}')
+                    except Exception as e:
+                        self.send_response(500)
+                        self.end_headers()
+                        self.wfile.write(str(e).encode())
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
         socketserver.TCPServer.allow_reuse_address = True
-        with socketserver.TCPServer((self.host, self.http_port), LogHandler) as httpd:
+        with socketserver.TCPServer(
+            (self.host, self.http_port), PublicDirHandler
+        ) as httpd:
             httpd.serve_forever()
 
 
@@ -254,8 +298,6 @@ def main():
         "--ws-port", type=int, default=8001, help="WebSocket port (default: 8001)"
     )
     args = parser.parse_args()
-
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     with open(LOG_FILE, "w") as f:
         f.write(f"[{datetime.now().isoformat()}] Server started\n")

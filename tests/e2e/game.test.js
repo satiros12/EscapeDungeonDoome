@@ -9,8 +9,8 @@ let server;
 
 async function startServer() {
     return new Promise((resolve, reject) => {
-        server = spawn('python3', ['server.py'], {
-            cwd: path.join(__dirname, '..'),
+        server = spawn('python3', ['src/server/server.py'], {
+            cwd: path.join(__dirname, '../..'),
             stdio: ['pipe', 'pipe', 'pipe']
         });
         server.on('error', reject);
