@@ -229,4 +229,167 @@ WebDoom/
 
 ---
 
-*Este documento describe el plan. No se ha realizado ningún cambio todavía.*
+## 8. Tareas Pendientes (Post-Reorganización)
+
+### 8.1 Extraer JS de HTML a `src/client/js/`
+
+**Objetivo:** Separar el JavaScript embebido en `index.html` en módulos independientes.
+
+**Archivos a crear:**
+```
+src/client/js/
+├── renderer.js    # Raycasting, renderizado de paredes y sprites
+├── sprites.js     # Enemigos, cadáveres, efectos visuales
+├── input.js       # Teclado (WASD, flechas, espacio, ESC, ALT)
+├── ui.js          # HUD, menús, consola
+└── client.js      # WebSocket, sincronización con servidor
+```
+
+**Pasos:**
+1. [ ] Crear carpeta `src/client/js/`
+2. [ ] Extraer código de raycasting a `renderer.js`
+3. [ ] Extraer lógica de sprites a `sprites.js`
+4. [ ] Extraer manejo de input a `input.js`
+5. [ ] Extraer UI (menú, pausa, consola) a `ui.js`
+6. [ ] Extraer WebSocket y lógica de cliente a `client.js`
+7. [ ] Actualizar `public/index.html` para cargar módulos
+8. [ ] Actualizar `package.json` scripts si es necesario
+9. [ ] Verificar que todos los tests pasen
+
+**Dependencias:** Ninguna (vanilla JS)
+
+---
+
+### 8.2 Crear Tests Unitarios en `tests/unit/`
+
+**Objetivo:** Añadir tests unitarios para lógica Python del servidor.
+
+**Archivos a crear:**
+```
+tests/unit/
+├── __init__.py
+├── test_physics.py   # Tests de colisiones y línea de vista
+├── test_ai.py        # Tests de IA de enemigos
+└── test_combat.py   # Tests de sistema de combate
+```
+
+**test_physics.py - Cobertura:**
+- [ ] `is_wall()` - Detección de paredes
+- [ ] `check_collision()` - Colisión jugador-pared
+- [ ] `line_of_sight()` - Línea de vista entre entidades
+
+**test_ai.py - Cobertura:**
+- [ ] `update_enemy()` - Transiciones de estado
+- [ ] `patrol_movement()` - Movimiento en patrulla
+- [ ] `chase_player()` - Persecución del jugador
+- [ ] `attack_player()` - Ataque al jugador
+
+**test_combat.py - Cobertura:**
+- [ ] `player_attack()` - Daño a enemigos
+- [ ] `enemy_attack()` - Daño al jugador
+- [ ] `check_victory()` - Condición de victoria
+- [ ] `check_defeat()` - Condición de derrota
+
+**Framework:** pytest
+
+---
+
+### 8.3 Consolidar Documentación
+
+**Objetivo:** Unificar y limpiar la documentación.
+
+**Acciones:**
+1. [ ] Revisar `docs/AGENTS.md` - actualizar si es necesario
+2. [ ] Revisar `docs/COMMANDS.md` - actualizar si es necesario
+3. [ ] Revisar `docs/TESTS.md` - integrar info de TEST.md
+4. [ ] Crear `docs/ARCHITECTURE.md` - descripción de la arquitectura
+5. [ ] Crear `README.md` - guía de inicio rápido
+
+**docs/ARCHITECTURE.md debe incluir:**
+- Diagrama de arquitectura (texto)
+- Flujo de datos cliente-servidor
+- Protocolo WebSocket
+- Estructura de archivos
+
+**README.md debe incluir:**
+- Requisitos
+- Instalación
+- Cómo ejecutar
+- Controles
+- Tests
+
+---
+
+### 8.4 Actualizar .gitignore
+
+**Objetivo:** Excluir archivos innecesarios del repositorio.
+
+**Contenido:**
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Entornos virtuales
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+game.log
+server.log
+
+# Node
+node_modules/
+package-lock.json
+
+# Test results
+test-results/
+.playwright/
+playwright-report/
+
+# Cache
+.ruff_cache/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+```
+
+---
+
+## 9. Plan de Ejecución
+
+### Orden recomendado:
+
+1. **Actualizar .gitignore** (5 min) - Prioridad: Alta
+2. **Consolidar documentación** (30 min) - Prioridad: Media
+3. **Crear tests unitarios** (2-3 horas) - Prioridad: Media
+4. **Extraer JS de HTML** (2-3 horas) - Prioridad: Baja
+
+### Notas:
+- Los tests E2E ya funcionan (16/16 passing)
+- La estructura de carpetas está creada
+- El servidor sirve correctamente desde `public/`
+
+---
+
+*Última actualización: 2026-03-25*

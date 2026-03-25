@@ -4,7 +4,8 @@
   "description": "WebDoom MVP - FPS Melee",
   "scripts": {
     "start": "python3 src/server/server.py",
-    "test": "node tests/e2e/game.test.js"
+    "test": "node tests/e2e/game.test.js",
+    "test:unit": "python -m pytest tests/unit/ -v"
   },
   "dependencies": {
     "playwright": "^1.58.2"

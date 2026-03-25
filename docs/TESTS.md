@@ -1,15 +1,19 @@
-# E2E Test Results
+# Tests - WebDoom
 
-## Summary
+## Tests E2E (Playwright)
 
+### Summary
 - **Total Tests**: 16
 - **Passed**: 16
 - **Skipped**: 0
 - **Failed**: 0
 
-## Test Results
+### Ejecución
+```bash
+npm test
+```
 
-### ✅ All Tests Passed (16)
+### Test Results
 
 | # | Test Name | Status |
 |---|-----------|--------|
@@ -30,12 +34,23 @@
 | 15 | Menu button in pause returns to menu | ✅ PASS |
 | 16 | Start new game after returning to menu | ✅ PASS |
 
-## Notes
+### Notas
+- God mode habilitado durante tests para evitar muerte del jugador
+- Pantallas de victoria/derrota requieren testing manual
 
-- All core game mechanics (movement, rotation, attack) work correctly
-- WebSocket communication is functioning
-- Server properly handles game state transitions
-- Pause menu works (ESC key)
-- Console works (ALT+P)
-- God mode enabled during tests to prevent player death during test execution
-- Victory/defeat screens need manual testing (require killing all enemies or dying)
+---
+
+## Tests Unitarios (Pendientes)
+
+### Objetivos
+- Tests de física (colisiones, línea de vista)
+- Tests de IA de enemigos
+- Tests de sistema de combate
+
+### Ubicación
+```
+tests/unit/
+├── test_physics.py
+├── test_ai.py
+└── test_combat.py
+```

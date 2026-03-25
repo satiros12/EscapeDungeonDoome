@@ -3,11 +3,35 @@
 ## Proyecto: WebDoom MVP - FPS Melee
 
 ### Stack
-- HTML5 Canvas + JavaScript vanilla
+- HTML5 Canvas + JavaScript vanilla (en public/index.html)
+- Python 3 + websockets + asyncio (en src/server/)
 - Raycasting para gráficos pseudo-3D (estilo DOOM)
-- Librería de raycasting: LodeV (https://lodev.org/cgtutor/raycasting.html)
-- Sin dependencias externas
-- Estructura simple: un único archivo HTML con CSS/JS embebido
+- Estructura modular: servidor separado del cliente
+
+### Normas de código
+1. Usa APIs modernas de Canvas y requestAnimationFrame
+2. Gráficos simplificados: paredes de colores sólidos, enemigos como sprites 2D
+3. Código conciso, sin sobreingeniería
+4. Commit tras cada fase completada
+5. Tests E2E con Playwright para verificar flujo de juego
+6. Nunca hagas kill de todo python.
+7. Estructura: public/ (frontend), src/server/ (backend), tests/ (tests)
+
+### Arquitectura
+```
+WebDoom/
+├── public/           # Frontend estático
+│   └── index.html   # Cliente HTML5 Canvas
+├── src/server/      # Servidor Python
+│   ├── server.py    # HTTP + WebSocket server
+│   ├── game_logic.py # IA, combate, movimiento
+│   ├── game_state.py # Entidades, estado
+│   └── physics.py   # Colisiones
+├── tests/
+│   └── e2e/         # Tests E2E con Playwright
+├── docs/            # Documentación
+├── package.json     # Dependencias npm (Playwright)
+└── requirements.txt # Dependencias Python
 
 ### Normas de código
 1. Usa APIs modernas de Canvas y requestAnimationFrame
@@ -65,3 +89,9 @@
 - `.` = suelo transitable
 - `P` = posición inicial jugador
 - `E` = posición enemigos
+
+### Flujo de datos
+1. Cliente envía input (teclas) al servidor via WebSocket
+2. Servidor procesa lógica (movimiento, IA, combate)
+3. Servidor envía estado actualizado al cliente
+4. Cliente renderiza el estado
