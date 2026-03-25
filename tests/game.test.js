@@ -52,27 +52,54 @@ async function runTests() {
     });
     page.on('pageerror', err => errors.push(err.message));
     
+    let passed = 0;
+    let failed = 0;
+    let skipped = 0;
+    
     try {
         console.log('Test 1: Menu screen loads');
         await page.goto(BASE_URL);
-        await page.waitForSelector('#menu h1');
+        await page.waitForLoadState('domcontentloaded');
+        await page.waitForTimeout(500);
+        
+        await page.waitForFunction(() => {
+            const status = document.getElementById('connection-status');
+            return status && status.classList.contains('connected');
+        }, { timeout: 10000 });
+        
+        await page.waitForTimeout(500);
+        
+        const menuVisible = await page.$eval('#menu', el => !el.classList.contains('hidden'));
+        if (!menuVisible) throw new Error('Menu should be visible on load');
         const title = await page.textContent('#menu h1');
         if (!title.includes('WEBDOOM')) throw new Error('Title not found');
         console.log('  PASS: Menu screen loads correctly');
+        passed++;
         
         console.log('Test 2: Start button exists');
         const startBtn = await page.$('#startBtn');
         if (!startBtn) throw new Error('Start button not found');
         console.log('  PASS: Start button exists');
+        passed++;
         
         console.log('Test 3: Clicking Start begins game');
+        
+        await page.waitForFunction(() => {
+            const status = document.getElementById('connection-status');
+            return status && status.classList.contains('connected');
+        }, { timeout: 10000 });
+        console.log('  WebSocket connected');
+        
         await startBtn.click();
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(2000);
+        
         const menuHidden = await page.$eval('#menu', el => el.classList.contains('hidden'));
         if (!menuHidden) throw new Error('Menu should be hidden after start');
+        
         const hudVisible = await page.$eval('#hud', el => !el.classList.contains('hidden'));
         if (!hudVisible) throw new Error('HUD should be visible during game');
         console.log('  PASS: Game starts when clicking Start button');
+        passed++;
         
         console.log('Test 4: Canvas is rendered');
         const canvas = await page.$('canvas#game');
@@ -80,11 +107,13 @@ async function runTests() {
         const canvasSize = await canvas.boundingBox();
         if (canvasSize.width < 100 || canvasSize.height < 100) throw new Error('Canvas too small');
         console.log('  PASS: Canvas is rendered');
+        passed++;
         
         console.log('Test 5: Health bar is visible');
         const healthBar = await page.$('#health-fill');
         if (!healthBar) throw new Error('Health bar not found');
         console.log('  PASS: Health bar is visible');
+        passed++;
         
         console.log('Test 6: Player movement (WASD) works without errors');
         await page.keyboard.down('KeyW');
@@ -100,6 +129,7 @@ async function runTests() {
         await page.waitForTimeout(200);
         await page.keyboard.up('KeyD');
         console.log('  PASS: Player movement keys work');
+        passed++;
         
         console.log('Test 7: Camera rotation works');
         await page.keyboard.down('ArrowRight');
@@ -109,37 +139,103 @@ async function runTests() {
         await page.waitForTimeout(200);
         await page.keyboard.up('ArrowLeft');
         console.log('  PASS: Camera rotation works');
+        passed++;
         
         console.log('Test 8: Attack with spacebar works');
         await page.keyboard.press('Space');
         await page.waitForTimeout(100);
         console.log('  PASS: Attack with spacebar works');
+        passed++;
         
-        console.log('Test 9: Return to menu via victory button');
-        await page.evaluate(() => {
-            document.getElementById('victory').classList.remove('hidden');
-            document.getElementById('hud').classList.add('hidden');
-        });
-        const victoryBtn = await page.$('#victoryBtn');
-        await victoryBtn.click();
+        console.log('  Enabling god mode for remaining tests...');
+        await page.keyboard.down('Alt');
+        await page.keyboard.press('KeyP');
+        await page.keyboard.up('Alt');
         await page.waitForTimeout(300);
-        const menuVisible = await page.$eval('#menu', el => !el.classList.contains('hidden'));
-        if (!menuVisible) throw new Error('Menu should be visible after clicking victory button');
-        console.log('  PASS: Can return to menu from victory screen');
+        await page.type('#console-input', 'god');
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(300);
+        await page.keyboard.down('Alt');
+        await page.keyboard.press('KeyP');
+        await page.keyboard.up('Alt');
+        await page.waitForTimeout(300);
         
-        console.log('Test 10: Return to menu via defeat button');
+        console.log('Test 9: Kill counter is visible during game');
+        const killCountVisible = await page.$eval('#kill-count', el => !el.classList.contains('hidden'));
+        if (!killCountVisible) throw new Error('Kill counter should be visible during game');
+        const killText = await page.$eval('#kills', el => el.textContent.trim());
+        if (killText !== '0') throw new Error(`Kill count should start at 0, got: "${killText}"`);
+        console.log('  PASS: Kill counter is visible and starts at 0');
+        passed++;
+        
+        console.log('Test 10: FPS counter is visible during game');
+        const fpsVisible = await page.$eval('#fps-counter', el => !el.classList.contains('hidden'));
+        if (!fpsVisible) throw new Error('FPS counter should be visible during game');
+        const fpsText = await page.textContent('#fps-counter');
+        if (!fpsText.includes('FPS:')) throw new Error('FPS counter should display FPS value');
+        console.log('  PASS: FPS counter is visible');
+        passed++;
+        
+        console.log('Test 11: ESC pauses the game');
+        await page.waitForTimeout(1000);
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(1000);
+        const pauseVisible = await page.$eval('#pause', el => !el.classList.contains('hidden'));
+        if (!pauseVisible) {
+            const gameStateVal = await page.evaluate(() => {
+                try { return window.gameState; } catch(e) { return 'undefined'; }
+            });
+            console.log('  Debug: gameState =', gameStateVal);
+            throw new Error('Pause menu should be visible after pressing ESC');
+        }
+        console.log('  PASS: ESC pauses the game');
+        passed++;
+        
+        console.log('Test 12: Resume button works');
+        await page.click('#resumeBtn');
+        await page.waitForTimeout(500);
+        const pauseHiddenAfterResume = await page.$eval('#pause', el => el.classList.contains('hidden'));
+        if (!pauseHiddenAfterResume) throw new Error('Pause menu should be hidden after resuming');
+        console.log('  PASS: Resume button works');
+        passed++;
+        
+        console.log('Test 13: Console opens with ALT+P');
+        await page.keyboard.down('Alt');
+        await page.keyboard.press('KeyP');
+        await page.keyboard.up('Alt');
+        await page.waitForTimeout(300);
+        const consoleVisible = await page.$eval('#console', el => !el.classList.contains('hidden'));
+        if (!consoleVisible) throw new Error('Console should be visible after pressing ALT+P');
+        console.log('  PASS: Console opens with ALT+P');
+        passed++;
+        
+        console.log('Test 14: Console closes with ALT+P');
+        await page.keyboard.down('Alt');
+        await page.keyboard.press('KeyP');
+        await page.keyboard.up('Alt');
+        await page.waitForTimeout(300);
+        const consoleHidden = await page.$eval('#console', el => el.classList.contains('hidden'));
+        if (!consoleHidden) throw new Error('Console should be hidden after pressing ALT+P again');
+        console.log('  PASS: Console closes with ALT+P');
+        passed++;
+        
+        console.log('Test 15: Menu button in pause returns to menu');
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+        await page.click('#pauseMenuBtn');
+        await page.waitForTimeout(300);
+        const menuVisibleFromPause = await page.$eval('#menu', el => !el.classList.contains('hidden'));
+        if (!menuVisibleFromPause) throw new Error('Menu should be visible after clicking Menu button');
+        console.log('  PASS: Menu button in pause returns to menu');
+        passed++;
+        
+        console.log('Test 16: Start new game after returning to menu');
         await page.click('#startBtn');
-        await page.waitForTimeout(200);
-        await page.evaluate(() => {
-            document.getElementById('defeat').classList.remove('hidden');
-            document.getElementById('hud').classList.add('hidden');
-        });
-        const defeatBtn = await page.$('#defeatBtn');
-        await defeatBtn.click();
-        await page.waitForTimeout(300);
-        const menuVisibleAgain = await page.$eval('#menu', el => !el.classList.contains('hidden'));
-        if (!menuVisibleAgain) throw new Error('Menu should be visible after clicking defeat button');
-        console.log('  PASS: Can return to menu from defeat screen');
+        await page.waitForTimeout(2000);
+        const hudVisibleAfterRestart = await page.$eval('#hud', el => !el.classList.contains('hidden'));
+        if (!hudVisibleAfterRestart) throw new Error('HUD should be visible when restarting game');
+        console.log('  PASS: Game restarts correctly');
+        passed++;
         
         if (errors.length > 0) {
             console.log('\nConsole errors detected:');
@@ -149,15 +245,19 @@ async function runTests() {
         }
         
         console.log('\n========================================');
-        console.log('All tests PASSED!');
+        console.log(`Tests: ${passed} passed, ${failed} failed, ${skipped} skipped`);
         console.log('========================================');
         
     } catch (err) {
         console.error('\nTEST FAILED:', err.message);
-        process.exitCode = 1;
+        failed++;
     } finally {
         await browser.close();
         await stopServer();
+    }
+    
+    if (failed > 0) {
+        process.exit(1);
     }
 }
 

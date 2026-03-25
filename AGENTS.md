@@ -16,6 +16,7 @@
 4. Commit tras cada fase completada
 5. Tests E2E con Playwright para verificar flujo de juego
 6. Logging a consola y fichero `game.log` con eventos importantes
+7. Nunca hagas kill de todo python.
 
 ### Estados de juego
 1. `menu` - Pantalla inicial con título y botón "Start"

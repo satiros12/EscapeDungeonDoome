@@ -21,6 +21,7 @@
             transition: transform 0.1s;
         }
         .btn:hover { transform: scale(1.1); }
+        .btn:focus { outline: 3px solid #fff; outline-offset: 2px; }
         #hud {
             position: absolute; bottom: 20px; left: 20px;
             font-family: 'Courier New', monospace; color: #fff; font-size: 1.2rem;
@@ -45,6 +46,41 @@
             position: absolute; top: 20px; right: 20px;
             font-family: 'Courier New', monospace; color: #fff; font-size: 1.2rem;
         }
+        #fps-counter {
+            position: absolute; top: 20px; left: 20px;
+            font-family: 'Courier New', monospace; color: #0f0; font-size: 1rem;
+        }
+        #connection-status {
+            position: absolute; top: 50px; left: 20px;
+            font-family: 'Courier New', monospace; color: #f00; font-size: 0.8rem;
+        }
+        #connection-status.connected { color: #0f0; }
+        #console {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: 200px;
+            background: rgba(0,0,0,0.9); color: #0f0; font-family: 'Courier New', monospace;
+            display: flex; flex-direction: column; border-top: 2px solid #0f0;
+            pointer-events: auto;
+        }
+        #console-header {
+            padding: 5px 10px; background: #0f0; color: #000; font-size: 0.9rem;
+        }
+        #console-output {
+            flex: 1; overflow-y: auto; padding: 10px; font-size: 0.9rem;
+        }
+        #console-output .error { color: #f00; }
+        #console-output .info { color: #0ff; }
+        #console-output .success { color: #0f0; }
+        #console-input {
+            width: 100%; padding: 10px; background: #111; color: #0f0;
+            border: none; border-top: 1px solid #0f0; font-family: inherit; font-size: 1rem;
+            outline: none;
+        }
+        #pause {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.9); color: #fff; font-family: 'Courier New', monospace;
+        }
+        #pause h1 { font-size: 4rem; color: #ffff00; text-shadow: 0 0 20px #ffff00; margin-bottom: 2rem; }
     </style>
 </head>
 <body>
@@ -69,28 +105,50 @@
             <div id="health-bar"><div id="health-fill" style="width: 100%;"></div></div>
         </div>
         <div id="kill-count" class="hidden">ENEMIGOS: <span id="kills">0</span>/3</div>
+        <div id="fps-counter" class="hidden">FPS: --</div>
+        <div id="connection-status" class="hidden">DESCONECTADO</div>
         <div id="crosshair" class="hidden"></div>
+        <div id="console" class="hidden">
+            <div id="console-header">CONSOLA (ALT+P para cerrar)</div>
+            <div id="console-output"></div>
+            <input type="text" id="console-input" placeholder="Escribe un comando..." autocomplete="off">
+        </div>
+        <div id="pause" class="hidden">
+            <h1 style="color: #ffff00;">PAUSA</h1>
+            <button class="btn" id="resumeBtn">REANUDAR</button>
+            <button class="btn" id="pauseMenuBtn">MENÚ PRINCIPAL</button>
+        </div>
         <div id="damage-flash"></div>
     </div>
     <script>
+    const CONFIG = {
+        FOV: Math.PI / 3,
+        HALF_FOV: Math.PI / 6,
+        NUM_RAYS: 320,
+        MAX_DEPTH: 16,
+        FOV_CULL: 0.2,
+        RAY_STEP: 0.02,
+        MIN_BRIGHTNESS: 0.3,
+        WALL_COLOR_BASE: [255, 200, 180],
+        WALL_COLOR_SIDE: [180, 160, 140],
+        PLAYER_MAX_HEALTH: 100
+    };
+
+    const WS_URL = `ws://${window.location.hostname}:8001`;
+
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        document.body.innerHTML = '<h1 style="color:red;text-align:center;margin-top:20%;font-family:sans-serif;">Error: Canvas 2D not supported</h1>';
+        throw new Error('Canvas 2D context not available');
+    }
 
     let SCREEN_WIDTH = window.innerWidth;
     let SCREEN_HEIGHT = window.innerHeight;
-    const FOV = Math.PI / 3;
-    const HALF_FOV = FOV / 2;
-    const NUM_RAYS = 320;
-    const MAX_DEPTH = 16;
-
-    const MOVE_SPEED = 3;
-    const ROT_SPEED = 2;
-    const ATTACK_RANGE = 1.5;
-    const ATTACK_COOLDOWN = 0.5;
-    const ENEMY_SPEED = 2.5;
-    const DETECTION_RANGE = 8;
-    const ENEMY_ATTACK_RANGE = 1.3;
-    const ENEMY_ATTACK_COOLDOWN = 1;
+    const FOV = CONFIG.FOV;
+    const HALF_FOV = CONFIG.HALF_FOV;
+    const NUM_RAYS = CONFIG.NUM_RAYS;
+    const MAX_DEPTH = CONFIG.MAX_DEPTH;
 
     const mapData = [
         "################",
@@ -115,42 +173,24 @@
     const MAP_HEIGHT = mapData.length;
 
     let gameState = 'menu';
-    let player = { x: 1.5, y: 1.5, angle: 0, health: 100, attackCooldown: 0 };
+    let consoleOpen = false;
+    let paused = false;
+    let player = { x: 1.5, y: 1.5, angle: 0, health: 100, attack_cooldown: 0 };
     let enemies = [];
-    let keys = {};
-    let lastTime = 0;
     let corpses = [];
     let kills = 0;
     let hitEffects = [];
+    let keys = {};
+    let ws = null;
+    let fps = 0;
+    let frameCount = 0;
+    let lastFpsTime = 0;
 
     function resizeCanvas() {
         SCREEN_WIDTH = window.innerWidth;
         SCREEN_HEIGHT = window.innerHeight;
         canvas.width = SCREEN_WIDTH;
         canvas.height = SCREEN_HEIGHT;
-    }
-
-    function parseMap() {
-        player.x = 1.5; player.y = 1.5;
-        enemies = [];
-        corpses = [];
-        kills = 0;
-        document.getElementById('kills').textContent = '0';
-        for (let y = 0; y < MAP_HEIGHT; y++) {
-            for (let x = 0; x < MAP_WIDTH; x++) {
-                const char = mapData[y][x];
-                if (char === 'P') { player.x = x + 0.5; player.y = y + 0.5; }
-                if (char === 'E') { 
-                    enemies.push({ 
-                        x: x + 0.5, y: y + 0.5, angle: Math.random() * Math.PI * 2, 
-                        health: 30, state: 'patrol', 
-                        patrolDir: Math.random() * Math.PI * 2, 
-                        deathTimer: 0, attackCooldown: 0,
-                        dyingProgress: 0
-                    }); 
-                }
-            }
-        }
     }
 
     function isWall(x, y) {
@@ -160,18 +200,6 @@
         return mapData[my][mx] === '#';
     }
 
-    function hasLineOfSight(x1, y1, x2, y2) {
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const steps = Math.ceil(dist * 10);
-        for (let i = 0; i < steps; i++) {
-            const t = i / steps;
-            if (isWall(x1 + dx * t, y1 + dy * t)) return false;
-        }
-        return true;
-    }
-
     function castRay(rayAngle) {
         let sin = Math.sin(rayAngle);
         let cos = Math.cos(rayAngle);
@@ -179,7 +207,7 @@
         if (Math.abs(cos) < 0.0001) cos = 0.0001;
 
         let dist = 0;
-        const step = 0.02;
+        const step = CONFIG.RAY_STEP;
         while (dist < MAX_DEPTH) {
             dist += step;
             const testX = player.x + cos * dist;
@@ -202,8 +230,10 @@
             const { dist, side } = castRay(rayAngle);
             const correctedDist = dist * Math.cos(rayAngle - player.angle);
             const wallHeight = Math.min(SCREEN_HEIGHT * 2, SCREEN_HEIGHT / correctedDist);
-            const brightness = Math.max(0.3, 1 - correctedDist / MAX_DEPTH);
-            const color = side === 0 ? [brightness * 255, brightness * 200, brightness * 180] : [brightness * 180, brightness * 160, brightness * 140];
+            const brightness = Math.max(CONFIG.MIN_BRIGHTNESS, 1 - correctedDist / MAX_DEPTH);
+            const color = side === 0 
+                ? [brightness * CONFIG.WALL_COLOR_BASE[0], brightness * CONFIG.WALL_COLOR_BASE[1], brightness * CONFIG.WALL_COLOR_BASE[2]] 
+                : [brightness * CONFIG.WALL_COLOR_SIDE[0], brightness * CONFIG.WALL_COLOR_SIDE[1], brightness * CONFIG.WALL_COLOR_SIDE[2]];
             ctx.fillStyle = `rgb(${color[0]},${color[1]},${color[2]})`;
             ctx.fillRect(i * stripWidth, (SCREEN_HEIGHT - wallHeight) / 2, stripWidth + 1, wallHeight);
         }
@@ -222,78 +252,10 @@
         ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT / 2);
     }
 
-    function movePlayer(dt) {
-        let moveX = 0, moveY = 0;
-        if (keys['KeyW']) { moveX += Math.cos(player.angle) * MOVE_SPEED * dt; moveY += Math.sin(player.angle) * MOVE_SPEED * dt; }
-        if (keys['KeyS']) { moveX -= Math.cos(player.angle) * MOVE_SPEED * dt; moveY -= Math.sin(player.angle) * MOVE_SPEED * dt; }
-        if (keys['KeyA']) { moveX += Math.cos(player.angle - Math.PI / 2) * MOVE_SPEED * dt; moveY += Math.sin(player.angle - Math.PI / 2) * MOVE_SPEED * dt; }
-        if (keys['KeyD']) { moveX += Math.cos(player.angle + Math.PI / 2) * MOVE_SPEED * dt; moveY += Math.sin(player.angle + Math.PI / 2) * MOVE_SPEED * dt; }
-        if (keys['ArrowLeft']) player.angle -= ROT_SPEED * dt;
-        if (keys['ArrowRight']) player.angle += ROT_SPEED * dt;
-
-        if (!isWall(player.x + moveX, player.y)) player.x += moveX;
-        if (!isWall(player.x, player.y + moveY)) player.y += moveY;
-
-        if (player.attackCooldown > 0) player.attackCooldown -= dt;
-    }
-
     function normalizeAngle(angle) {
         while (angle > Math.PI) angle -= Math.PI * 2;
         while (angle < -Math.PI) angle += Math.PI * 2;
         return angle;
-    }
-
-    function updateEnemies(dt) {
-        const aliveEnemies = enemies.filter(e => e.state !== 'dead' && e.state !== 'dying');
-        
-        aliveEnemies.forEach(enemy => {
-            const dx = player.x - enemy.x;
-            const dy = player.y - enemy.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            const angleToPlayer = Math.atan2(dy, dx);
-            let angleDiff = normalizeAngle(angleToPlayer - enemy.angle);
-            const canSeePlayer = dist < DETECTION_RANGE && hasLineOfSight(enemy.x, enemy.y, player.x, player.y);
-
-            if (enemy.state === 'patrol') {
-                enemy.x += Math.cos(enemy.patrolDir) * 1 * dt;
-                enemy.y += Math.sin(enemy.patrolDir) * 1 * dt;
-                if (isWall(enemy.x + Math.cos(enemy.patrolDir) * 0.5, enemy.y + Math.sin(enemy.patrolDir) * 0.5)) {
-                    enemy.patrolDir += Math.PI / 2 + Math.random() * Math.PI;
-                }
-                if (canSeePlayer && dist < DETECTION_RANGE) {
-                    enemy.state = 'chase';
-                    log(`Enemy spotted player at distance ${dist.toFixed(2)}`);
-                }
-            } else if (enemy.state === 'chase') {
-                if (dist > ENEMY_ATTACK_RANGE) {
-                    enemy.angle = angleToPlayer;
-                    const ex = enemy.x + Math.cos(enemy.angle) * ENEMY_SPEED * dt;
-                    const ey = enemy.y + Math.sin(enemy.angle) * ENEMY_SPEED * dt;
-                    if (!isWall(ex, enemy.y)) enemy.x = ex;
-                    if (!isWall(enemy.x, ey)) enemy.y = ey;
-                } else {
-                    enemy.state = 'attack';
-                }
-                if (!canSeePlayer && dist > 12) {
-                    enemy.state = 'patrol';
-                    log('Enemy lost player, returning to patrol');
-                }
-            } else if (enemy.state === 'attack') {
-                if (dist > ENEMY_ATTACK_RANGE + 0.5) {
-                    enemy.state = 'chase';
-                } else if (enemy.attackCooldown <= 0 && dist <= ENEMY_ATTACK_RANGE) {
-                    enemy.attackCooldown = ENEMY_ATTACK_COOLDOWN;
-                    player.health -= 10;
-                    showDamageFlash();
-                    log(`Enemy attacks! Player health: ${player.health}`);
-                    if (player.health <= 0) {
-                        showDefeat();
-                    }
-                }
-            }
-
-            if (enemy.attackCooldown > 0) enemy.attackCooldown -= dt;
-        });
     }
 
     function renderSprites() {
@@ -306,7 +268,7 @@
             const dist = Math.sqrt(dx * dx + dy * dy);
             const angleToEnemy = Math.atan2(dy, dx);
             let angleDiff = normalizeAngle(angleToEnemy - player.angle);
-            if (Math.abs(angleDiff) < HALF_FOV + 0.2 && dist < MAX_DEPTH) {
+            if (Math.abs(angleDiff) < HALF_FOV + CONFIG.FOV_CULL && dist < MAX_DEPTH) {
                 sprites.push({ ...enemy, dist, angleDiff, isEnemy: true });
             }
         });
@@ -317,7 +279,7 @@
             const dist = Math.sqrt(dx * dx + dy * dy);
             const angleToCorpse = Math.atan2(dy, dx);
             const angleDiff = normalizeAngle(angleToCorpse - player.angle);
-            if (Math.abs(angleDiff) < HALF_FOV + 0.2 && dist < MAX_DEPTH) {
+            if (Math.abs(angleDiff) < HALF_FOV + CONFIG.FOV_CULL && dist < MAX_DEPTH) {
                 sprites.push({ x: corpse.x, y: corpse.y, dist, angleDiff, isEnemy: false, isCorpse: true });
             }
         });
@@ -337,10 +299,10 @@
                 ctx.fillStyle = '#220000';
                 ctx.fillRect(screenX - size / 2, screenY, size, size / 4);
             } else if (sprite.state === 'dying') {
-                const alpha = 1 - sprite.dyingProgress;
+                const alpha = 1 - sprite.dying_progress;
                 ctx.fillStyle = `rgba(102, 0, 0, ${alpha})`;
                 ctx.beginPath();
-                ctx.arc(screenX, screenY, size / 2 * (1 + sprite.dyingProgress * 0.3), 0, Math.PI * 2);
+                ctx.arc(screenX, screenY, size / 2 * (1 + sprite.dying_progress * 0.3), 0, Math.PI * 2);
                 ctx.fill();
             } else {
                 const color = sprite.state === 'chase' || sprite.state === 'attack' ? '#ff2222' : '#aa3333';
@@ -378,37 +340,6 @@
         fill.style.background = player.health > 50 ? '#00ff00' : player.health > 25 ? '#ffff00' : '#ff0000';
     }
 
-    function playerAttack() {
-        if (player.attackCooldown > 0) return;
-        player.attackCooldown = ATTACK_COOLDOWN;
-
-        let hitEnemy = false;
-        enemies.forEach(enemy => {
-            if (enemy.state === 'dying' || enemy.state === 'dead') return;
-            const dx = enemy.x - player.x;
-            const dy = enemy.y - player.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < ATTACK_RANGE) {
-                enemy.health -= 10;
-                hitEnemy = true;
-                hitEffects.push({ x: enemy.x, y: enemy.y, timer: 0.3 });
-                log(`Player hits enemy! Enemy health: ${enemy.health} (dist: ${dist.toFixed(2)})`);
-                if (enemy.health <= 0) {
-                    enemy.state = 'dying';
-                    enemy.dyingProgress = 0;
-                    log('Enemy entering dying state');
-                }
-            }
-        });
-    }
-
-    function updateHitEffects(dt) {
-        hitEffects = hitEffects.filter(e => {
-            e.timer -= dt;
-            return e.timer > 0;
-        });
-    }
-
     function renderHitEffects() {
         hitEffects.forEach(effect => {
             const dx = effect.x - player.x;
@@ -416,7 +347,7 @@
             const dist = Math.sqrt(dx * dx + dy * dy);
             const angleToEffect = Math.atan2(dy, dx);
             const angleDiff = normalizeAngle(angleToEffect - player.angle);
-            if (Math.abs(angleDiff) < HALF_FOV + 0.2 && dist < MAX_DEPTH) {
+            if (Math.abs(angleDiff) < HALF_FOV + CONFIG.FOV_CULL && dist < MAX_DEPTH) {
                 const screenX = SCREEN_WIDTH / 2 + (angleDiff / HALF_FOV) * (SCREEN_WIDTH / 2);
                 const size = Math.min(100, SCREEN_HEIGHT / dist * 0.15);
                 const screenY = SCREEN_HEIGHT / 2;
@@ -434,106 +365,354 @@
         });
     }
 
-    function updateDyingEnemies(dt) {
-        enemies.forEach(enemy => {
-            if (enemy.state === 'dying') {
-                enemy.dyingProgress += dt;
-                if (enemy.dyingProgress >= 1) {
-                    enemy.state = 'dead';
-                    corpses.push({ x: enemy.x, y: enemy.y });
-                    kills++;
-                    document.getElementById('kills').textContent = `${kills}/3`;
-                    log(`Enemy dead. Corpses: ${corpses.length}`);
-                    const aliveEnemies = enemies.filter(e => e.state !== 'dead');
-                    if (aliveEnemies.length === 0) {
-                        setTimeout(() => showVictory(), 500);
-                    }
-                }
-            }
-        });
+    function render(timestamp) {
+        updateFPS(timestamp);
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+        renderCeiling();
+        renderFloor();
+        renderWalls();
+        renderSprites();
+        renderHitEffects();
+        updateHUD();
+        requestAnimationFrame(render);
     }
 
-    function gameLoop(timestamp) {
-        const dt = Math.min((timestamp - lastTime) / 1000, 0.1);
-        lastTime = timestamp;
-
-        if (gameState === 'playing') {
-            movePlayer(dt);
-            updateEnemies(dt);
-            updateDyingEnemies(dt);
-            updateHitEffects(dt);
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-            renderCeiling();
-            renderFloor();
-            renderWalls();
-            renderSprites();
-            renderHitEffects();
-            updateHUD();
+    function updateFPS(timestamp) {
+        frameCount++;
+        if (timestamp - lastFpsTime >= 1000) {
+            fps = frameCount;
+            frameCount = 0;
+            lastFpsTime = timestamp;
+            const fpsEl = document.getElementById('fps-counter');
+            if (fpsEl) fpsEl.textContent = `FPS: ${fps}`;
         }
-        requestAnimationFrame(gameLoop);
     }
 
-    function startGame() {
-        parseMap();
-        player.health = 100;
-        player.attackCooldown = 0;
-        gameState = 'playing';
+    function updateUI() {
+        document.getElementById('kills').textContent = kills !== undefined ? kills : 0;
+        
+        if (player.health < CONFIG.PLAYER_MAX_HEALTH && player.health > 0) {
+            const prevHealth = player.health;
+            setTimeout(() => {
+                if (player.health < prevHealth) {
+                    showDamageFlash();
+                }
+            }, 50);
+        }
+    }
+
+    function showScreen(screenId) {
         document.getElementById('menu').classList.add('hidden');
         document.getElementById('victory').classList.add('hidden');
         document.getElementById('defeat').classList.add('hidden');
+        document.getElementById('pause').classList.add('hidden');
+        document.getElementById('hud').classList.add('hidden');
+        document.getElementById('crosshair').classList.add('hidden');
+        document.getElementById('kill-count').classList.add('hidden');
+        document.getElementById('fps-counter').classList.add('hidden');
+        
+        if (screenId && screenId !== 'none') {
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+    }
+
+    function connectWebSocket() {
+        const statusEl = document.getElementById('connection-status');
+        
+        try {
+            ws = new WebSocket(WS_URL);
+            
+            ws.onopen = () => {
+                console.log('Connected to server');
+                statusEl.textContent = 'CONECTADO';
+                statusEl.classList.add('connected');
+                statusEl.classList.remove('hidden');
+                // Request initial state
+                ws.send(JSON.stringify({ type: 'get_state' }));
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.game_state !== undefined) {
+                        gameState = data.game_state;
+                        player = data.player || player;
+                        enemies = data.enemies || enemies;
+                        corpses = data.corpses || corpses;
+                        kills = data.kills || kills;
+                        hitEffects = data.hit_effects || hitEffects;
+                        
+                        updateUI();
+                        
+                        if (paused) {
+                            return;
+                        }
+                        
+                        if (gameState === 'menu') {
+                            showScreen('menu');
+                        } else if (gameState === 'playing') {
+                            showScreen('none');
+                            document.getElementById('hud').classList.remove('hidden');
+                            document.getElementById('crosshair').classList.remove('hidden');
+                            document.getElementById('kill-count').classList.remove('hidden');
+                            document.getElementById('fps-counter').classList.remove('hidden');
+                        } else if (gameState === 'victory') {
+                            showScreen('victory');
+                        } else if (gameState === 'defeat') {
+                            showScreen('defeat');
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing state:', e);
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('Disconnected from server');
+                statusEl.textContent = 'DESCONECTADO';
+                statusEl.classList.remove('connected');
+                setTimeout(connectWebSocket, 2000);
+            };
+            
+            ws.onerror = (err) => {
+                console.error('WebSocket error:', err);
+            };
+            
+        } catch (e) {
+            console.error('Failed to connect:', e);
+            setTimeout(connectWebSocket, 2000);
+        }
+    }
+
+    function sendInput() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'input', keys: keys }));
+        }
+    }
+
+    function sendAttack() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'attack' }));
+        }
+    }
+
+    function startGame() {
+        paused = false;
+        
+        showScreen('none');
         document.getElementById('hud').classList.remove('hidden');
         document.getElementById('crosshair').classList.remove('hidden');
         document.getElementById('kill-count').classList.remove('hidden');
-        log('Game started');
+        document.getElementById('fps-counter').classList.remove('hidden');
+        
+        console.log('startGame called, sending start to server');
+        
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            if (gameState === 'menu') {
+                ws.send(JSON.stringify({ type: 'start' }));
+                console.log('Start message sent to server (new game)');
+            } else {
+                ws.send(JSON.stringify({ type: 'resume' }));
+                console.log('Resume message sent to server');
+            }
+        } else {
+            console.log('WebSocket not open, state:', ws ? ws.readyState : 'ws is null');
+        }
     }
 
-    function showVictory() {
-        if (gameState !== 'playing') return;
-        gameState = 'victory';
-        document.getElementById('hud').classList.add('hidden');
-        document.getElementById('crosshair').classList.add('hidden');
-        document.getElementById('kill-count').classList.add('hidden');
-        document.getElementById('victory').classList.remove('hidden');
-        log('VICTORY - All enemies eliminated');
+    function returnToMenu() {
+        gameState = 'menu';
+        paused = false;
+        showScreen('menu');
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'menu' }));
+        }
     }
 
-    function showDefeat() {
-        if (gameState !== 'playing') return;
-        gameState = 'defeat';
-        document.getElementById('hud').classList.add('hidden');
-        document.getElementById('crosshair').classList.add('hidden');
-        document.getElementById('kill-count').classList.add('hidden');
-        document.getElementById('defeat').classList.remove('hidden');
-        log('DEFEAT - Player died');
+    function toggleConsole() {
+        consoleOpen = !consoleOpen;
+        const consoleEl = document.getElementById('console');
+        if (consoleOpen) {
+            consoleEl.classList.remove('hidden');
+            document.getElementById('console-input').focus();
+            keys = {};
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'input', keys: {} }));
+            }
+        } else {
+            consoleEl.classList.add('hidden');
+            document.getElementById('console-input').blur();
+        }
     }
 
-    function log(msg) {
-        console.log(msg);
-        fetch('/log', { method: 'POST', body: JSON.stringify({ msg, time: new Date().toISOString() }) }).catch(() => {});
+    function logToConsole(msg, type = '') {
+        const output = document.getElementById('console-output');
+        const line = document.createElement('div');
+        line.className = type;
+        line.textContent = '> ' + msg;
+        output.appendChild(line);
+        output.scrollTop = output.scrollHeight;
+    }
+
+    function executeCommand(cmd) {
+        const parts = cmd.trim().split(' ');
+        const command = parts[0].toLowerCase();
+        const args = parts.slice(1);
+
+        logToConsole(cmd, 'info');
+
+        switch (command) {
+            case 'help':
+                logToConsole('Comandos disponibles:', 'info');
+                logToConsole('  help - Mostrar esta ayuda', 'success');
+                logToConsole('  status - Mostrar estado del juego', 'success');
+                logToConsole('  heal - Curar al jugador (100 HP)', 'success');
+                logToConsole('  kill - Eliminar a todos los enemigos', 'success');
+                logToConsole('  spawn <x> <y> - Spawnear enemigo en posición', 'success');
+                logToConsole('  god - Alternar modo dios', 'success');
+                logToConsole('  speed <n> - Establecer velocidad (1-10)', 'success');
+                logToConsole('  clear - Limpiar consola', 'success');
+                break;
+            case 'status':
+                logToConsole(`Estado: ${gameState}`, 'info');
+                logToConsole(`Jugador: x=${player.x.toFixed(2)}, y=${player.y.toFixed(2)}, angle=${player.angle.toFixed(2)}, health=${player.health}`, 'info');
+                logToConsole(`Enemigos: ${enemies.length}`, 'info');
+                logToConsole(`Paused: ${paused}`, 'info');
+                logToConsole(`Console: ${consoleOpen ? 'abierta' : 'cerrada'}`, 'info');
+                break;
+            case 'heal':
+                player.health = 100;
+                updateHUD();
+                logToConsole('Jugador curado (100 HP)', 'success');
+                break;
+            case 'kill':
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'console_command', command: 'kill_all' }));
+                    logToConsole('Enemigos eliminados', 'success');
+                }
+                break;
+            case 'spawn':
+                if (args.length >= 2) {
+                    const x = parseFloat(args[0]);
+                    const y = parseFloat(args[1]);
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'console_command', command: 'spawn', x, y }));
+                        logToConsole(`Enemigo spawneado en (${x}, ${y})`, 'success');
+                    }
+                } else {
+                    logToConsole('Uso: spawn <x> <y>', 'error');
+                }
+                break;
+            case 'god':
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'console_command', command: 'god' }));
+                    logToConsole('Modo dios activado', 'success');
+                }
+                break;
+            case 'speed':
+                if (args.length >= 1) {
+                    const speed = parseFloat(args[0]);
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'console_command', command: 'speed', value: speed }));
+                        logToConsole(`Velocidad establecida a ${speed}`, 'success');
+                    }
+                } else {
+                    logToConsole('Uso: speed <n>', 'error');
+                }
+                break;
+            case 'clear':
+                document.getElementById('console-output').innerHTML = '';
+                break;
+            case '':
+                break;
+            default:
+                logToConsole(`Comando desconocido: ${command}. Escribe "help" para ayuda.`, 'error');
+        }
+    }
+
+    function pauseGame() {
+        if (gameState === 'playing' && !paused && !consoleOpen) {
+            paused = true;
+            showScreen('pause');
+            logToConsole('Juego pausado', 'info');
+        }
+    }
+
+    function resumeGame() {
+        if (paused) {
+            paused = false;
+            showScreen('none');
+            document.getElementById('hud').classList.remove('hidden');
+            document.getElementById('crosshair').classList.remove('hidden');
+            document.getElementById('kill-count').classList.remove('hidden');
+            document.getElementById('fps-counter').classList.remove('hidden');
+            logToConsole('Juego reanudado', 'info');
+        }
     }
 
     document.addEventListener('keydown', e => {
-        keys[e.code] = true;
-        if (e.code === 'Space' && gameState === 'playing') {
+        if (e.code === 'KeyP' && e.altKey) {
             e.preventDefault();
-            playerAttack();
+            toggleConsole();
+            return;
+        }
+
+        if (consoleOpen) {
+            return;
+        }
+
+        if (e.code === 'Escape' && gameState === 'playing') {
+            e.preventDefault();
+            pauseGame();
+            return;
+        }
+
+        if (paused || gameState !== 'playing') {
+            return;
+        }
+
+        keys[e.code] = true;
+        sendInput();
+        
+        if (e.code === 'Space') {
+            e.preventDefault();
+            sendAttack();
         }
         if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
             e.preventDefault();
         }
     });
 
-    document.addEventListener('keyup', e => keys[e.code] = false);
+    document.addEventListener('keyup', e => {
+        if (consoleOpen || paused || gameState !== 'playing') {
+            return;
+        }
+        keys[e.code] = false;
+        sendInput();
+    });
 
     document.getElementById('startBtn').addEventListener('click', startGame);
-    document.getElementById('victoryBtn').addEventListener('click', () => { document.getElementById('victory').classList.add('hidden'); document.getElementById('menu').classList.remove('hidden'); gameState = 'menu'; });
-    document.getElementById('defeatBtn').addEventListener('click', () => { document.getElementById('defeat').classList.add('hidden'); document.getElementById('menu').classList.remove('hidden'); gameState = 'menu'; });
+    document.getElementById('victoryBtn').addEventListener('click', returnToMenu);
+    document.getElementById('defeatBtn').addEventListener('click', returnToMenu);
+    document.getElementById('resumeBtn').addEventListener('click', resumeGame);
+    document.getElementById('pauseMenuBtn').addEventListener('click', returnToMenu);
+
+    document.getElementById('console-input').addEventListener('keydown', function(e) {
+        if (e.code === 'Enter') {
+            const cmd = this.value;
+            this.value = '';
+            executeCommand(cmd);
+        }
+    });
 
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
-    parseMap();
-    requestAnimationFrame(gameLoop);
+
+    showScreen('menu');
+    connectWebSocket();
+    requestAnimationFrame(render);
     </script>
 </body>
 </html>
