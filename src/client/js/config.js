@@ -11,7 +11,7 @@ const CONFIG = {
     PLAYER_MAX_HEALTH: 100
 };
 
-const WS_URL = `ws://${window.location.hostname}:8001`;
+const WS_URL = `ws://${window.location.hostname}:${(parseInt(window.location.port) || 5000) + 1}`;
 
 const mapData = [
     "################",

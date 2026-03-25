@@ -1,4 +1,4 @@
-const keys = {};
+let keys = {};
 
 document.addEventListener('keydown', e => {
     if (e.code === 'KeyP' && e.altKey) {
