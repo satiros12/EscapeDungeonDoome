@@ -32,6 +32,42 @@ class Game {
         document.getElementById('defeatBtn')?.addEventListener('click', () => this.returnToMenu());
         document.getElementById('resumeBtn')?.addEventListener('click', () => this.resume());
         document.getElementById('pauseMenuBtn')?.addEventListener('click', () => this.returnToMenu());
+        
+        document.getElementById('prevMap')?.addEventListener('click', () => this._selectPrevMap());
+        document.getElementById('nextMap')?.addEventListener('click', () => this._selectNextMap());
+        
+        this._requestMapsList();
+    }
+    
+    _requestMapsList() {
+        this._send({ type: 'get_maps' });
+    }
+    
+    _selectPrevMap() {
+        this._send({ type: 'prev_map' });
+    }
+    
+    _selectNextMap() {
+        this._send({ type: 'next_map' });
+    }
+    
+    _updateMapSelector(data) {
+        const nameEl = document.getElementById('map-name');
+        const descEl = document.getElementById('map-desc');
+        
+        if (nameEl && data.map_name) {
+            nameEl.textContent = data.map_name;
+        }
+        
+        if (descEl) {
+            const descriptions = {
+                'Base Map': 'Classic corridors',
+                'Arena': 'Open combat arena',
+                'Maze': 'Complex maze layout',
+                'Arena 2': 'Large arena with pillars'
+            };
+            descEl.textContent = descriptions[data.map_name] || '';
+        }
     }
 
     _handleKeyDown(e) {
@@ -115,6 +151,11 @@ class Game {
     }
 
     _handleServerMessage(data) {
+        if (data.type === 'maps_list' || data.type === 'map_changed' || data.type === 'map_selected') {
+            this._updateMapSelector(data);
+            return;
+        }
+        
         if (data.game_state !== undefined) {
             this.state.updateFromServer(data);
             this._updateUI();

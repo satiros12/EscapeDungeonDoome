@@ -81,6 +81,15 @@
             background: rgba(0,0,0,0.9); color: #fff; font-family: 'Courier New', monospace;
         }
         #pause h1 { font-size: 4rem; color: #ffff00; text-shadow: 0 0 20px #ffff00; margin-bottom: 2rem; }
+        #map-selector {
+            display: flex; align-items: center; justify-content: center; margin: 1rem 0;
+        }
+        #map-selector .arrow {
+            font-size: 2rem; color: #ff0000; cursor: pointer; padding: 0 1rem; user-select: none;
+        }
+        #map-selector .arrow:hover { color: #fff; transform: scale(1.2); }
+        #map-selector #map-name { font-size: 1.5rem; color: #fff; min-width: 200px; text-align: center; }
+        #map-selector #map-desc { font-size: 0.9rem; color: #888; text-align: center; margin-top: 0.5rem; }
     </style>
 </head>
 <body>
@@ -88,6 +97,14 @@
     <div id="ui">
         <div id="menu">
             <h1>WEBDOOM</h1>
+            <div id="map-selector">
+                <span class="arrow" id="prevMap">◄</span>
+                <div>
+                    <div id="map-name">Base Map</div>
+                    <div id="map-desc">Classic corridors</div>
+                </div>
+                <span class="arrow" id="nextMap">►</span>
+            </div>
             <button class="btn" id="startBtn">COMENZAR</button>
         </div>
         <div id="victory" class="hidden">

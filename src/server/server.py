@@ -123,6 +123,43 @@ class GameServer:
                     elif msg_type == "attack":
                         self.logic.player_attack()
 
+                    elif msg_type == "select_map":
+                        map_name = data.get("map", "base")
+                        if self.state.set_map(map_name):
+                            self.logic.log(f"Map changed to: {map_name}")
+                        await websocket.send(json.dumps({
+                            "type": "map_selected",
+                            "map": map_name,
+                            "map_name": self.state.get_map_info().get("name", map_name),
+                            "available_maps": self.state.get_available_maps()
+                        }))
+
+                    elif msg_type == "next_map":
+                        next_map = self.state.map_manager.get_next_map()
+                        self.state.set_map(next_map)
+                        await websocket.send(json.dumps({
+                            "type": "map_changed",
+                            "map": next_map,
+                            "map_name": self.state.get_map_info().get("name", next_map)
+                        }))
+
+                    elif msg_type == "prev_map":
+                        prev_map = self.state.map_manager.get_prev_map()
+                        self.state.set_map(prev_map)
+                        await websocket.send(json.dumps({
+                            "type": "map_changed",
+                            "map": prev_map,
+                            "map_name": self.state.get_map_info().get("name", prev_map)
+                        }))
+
+                    elif msg_type == "get_maps":
+                        await websocket.send(json.dumps({
+                            "type": "maps_list",
+                            "maps": self.state.get_available_maps(),
+                            "current_map": self.state.current_map,
+                            "current_map_name": self.state.get_map_info().get("name", "Unknown")
+                        }))
+
                     elif msg_type == "resume":
                         print(f"DEBUG: Processing RESUME message", flush=True)
                         self.state.game_state = "playing"

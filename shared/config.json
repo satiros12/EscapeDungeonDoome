@@ -1,0 +1,102 @@
+{
+  "game": {
+    "player_health": 100,
+    "enemy_health": 30,
+    "move_speed": 3,
+    "rot_speed": 2,
+    "attack_range": 1.5,
+    "attack_cooldown": 0.5,
+    "enemy_speed": 2.5,
+    "detection_range": 5,
+    "enemy_attack_range": 1.0,
+    "enemy_attack_cooldown": 1,
+    "patrol_speed": 1,
+    "collision_margin": 0.5,
+    "lost_player_distance": 12,
+    "dt_max": 0.1
+  },
+  "rendering": {
+    "fov": 1.0471975512,
+    "half_fov": 0.5235987756,
+    "num_rays": 320,
+    "max_depth": 16,
+    "fov_cull": 0.2,
+    "ray_step": 0.02,
+    "min_brightness": 0.3,
+    "wall_color_base": [255, 200, 180],
+    "wall_color_side": [180, 160, 140]
+  },
+  "weapons": {
+    "fists": {
+      "name": "Fists",
+      "type": "melee",
+      "damage": 10,
+      "range": 1.5,
+      "cooldown": 0.5,
+      "projectile": false,
+      "pellets": 1
+    },
+    "chainsaw": {
+      "name": "Chainsaw",
+      "type": "melee",
+      "damage": 25,
+      "range": 1.5,
+      "cooldown": 0.2,
+      "projectile": false,
+      "pellets": 1
+    },
+    "shotgun": {
+      "name": "Shotgun",
+      "type": "projectile",
+      "damage": 10,
+      "range": 8.0,
+      "cooldown": 1.0,
+      "projectile": true,
+      "pellets": 8
+    },
+    "chaingun": {
+      "name": "Chaingun",
+      "type": "projectile",
+      "damage": 8,
+      "range": 15.0,
+      "cooldown": 0.1,
+      "projectile": true,
+      "pellets": 1
+    }
+  },
+  "enemy_types": {
+    "imp": {
+      "name": "Imp",
+      "health": 30,
+      "speed": 2.5,
+      "damage": 10,
+      "attack_range": 1.0,
+      "attack_cooldown": 1.0,
+      "detection_range": 5,
+      "patrol_speed": 1.0,
+      "behavior": "chase"
+    },
+    "demon": {
+      "name": "Demon",
+      "health": 60,
+      "speed": 2.0,
+      "damage": 15,
+      "attack_range": 1.2,
+      "attack_cooldown": 1.5,
+      "detection_range": 6,
+      "patrol_speed": 0.8,
+      "behavior": "flanker"
+    },
+    "cacodemon": {
+      "name": "Cacodemon",
+      "health": 100,
+      "speed": 1.5,
+      "damage": 20,
+      "attack_range": 3.0,
+      "attack_cooldown": 2.0,
+      "detection_range": 8,
+      "patrol_speed": 0.5,
+      "behavior": "shooter"
+    }
+  }
+}
