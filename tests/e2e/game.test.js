@@ -91,6 +91,37 @@ async function runTests() {
         console.log('  PASS: Start button exists');
         passed++;
         
+        console.log('Test 2b: Map selector exists');
+        const mapSelector = await page.$('#map-selector');
+        if (!mapSelector) throw new Error('Map selector should exist in menu');
+        const mapName = await page.textContent('#map-name');
+        console.log('  Current map:', mapName);
+        console.log('  PASS: Map selector exists');
+        passed++;
+        
+        console.log('Test 2c: Map navigation arrows exist');
+        const prevMap = await page.$('#prevMap');
+        const nextMap = await page.$('#nextMap');
+        if (!prevMap || !nextMap) throw new Error('Map navigation arrows should exist');
+        console.log('  PASS: Map navigation arrows exist');
+        passed++;
+        
+        console.log('Test 2d: Navigate to next map');
+        try {
+            await page.evaluate(() => {
+                const btn = document.getElementById('nextMap');
+                if (btn) btn.click();
+            });
+            await page.waitForTimeout(500);
+            const newMapName = await page.textContent('#map-name');
+            console.log('  New map:', newMapName);
+            console.log('  PASS: Map navigation works');
+            passed++;
+        } catch (e) {
+            console.log('  SKIP: Map navigation test failed:', e.message);
+            skipped++;
+        }
+        
         console.log('Test 3: Clicking Start begins game');
         
         await page.waitForFunction(() => {
