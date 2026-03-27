@@ -6,8 +6,12 @@ import sys
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 
-_SHARED_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "shared")
-_MAPS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "maps")
+import json
+
+_SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(_SERVER_DIR))
+_SHARED_DIR = os.path.join(_PROJECT_ROOT, "shared")
+_MAPS_DIR = os.path.join(_PROJECT_ROOT, "maps")
 sys.path.insert(0, _SHARED_DIR)
 
 try:
