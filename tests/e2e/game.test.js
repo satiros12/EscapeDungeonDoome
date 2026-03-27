@@ -106,21 +106,57 @@ async function runTests() {
         console.log('  PASS: Map navigation arrows exist');
         passed++;
         
-        console.log('Test 2d: Navigate to next map');
-        try {
-            await page.evaluate(() => {
-                const btn = document.getElementById('nextMap');
-                if (btn) btn.click();
-            });
-            await page.waitForTimeout(500);
-            const newMapName = await page.textContent('#map-name');
-            console.log('  New map:', newMapName);
-            console.log('  PASS: Map navigation works');
-            passed++;
-        } catch (e) {
-            console.log('  SKIP: Map navigation test failed:', e.message);
-            skipped++;
+        console.log('Test 2d: Navigate to next map via button');
+        const initialMapName = await page.textContent('#map-name');
+        console.log('  Initial map:', initialMapName);
+        await page.evaluate(() => {
+            const btn = document.getElementById('nextMap');
+            if (btn) btn.click();
+        });
+        await page.waitForTimeout(1000);
+        const newMapName = await page.textContent('#map-name');
+        console.log('  After click - map:', newMapName);
+        if (newMapName === initialMapName) {
+            throw new Error('Map name should have changed after clicking next map button');
         }
+        const initialMapDesc = await page.textContent('#map-desc');
+        console.log('  Description:', initialMapDesc);
+        console.log('  PASS: Map button navigation works');
+        passed++;
+
+        console.log('Test 2e: Navigate to previous map via button');
+        await page.evaluate(() => {
+            const btn = document.getElementById('prevMap');
+            if (btn) btn.click();
+        });
+        await page.waitForTimeout(1000);
+        const prevMapName = await page.textContent('#map-name');
+        console.log('  After prev - map:', prevMapName);
+        if (prevMapName === newMapName) {
+            throw new Error('Map name should have changed after clicking prev map button');
+        }
+        console.log('  PASS: Previous map button works');
+        passed++;
+
+        console.log('Test 2f: Navigate maps with keyboard arrows');
+        const currentMapName = await page.textContent('#map-name');
+        console.log('  Current map before keyboard:', currentMapName);
+        await page.keyboard.press('ArrowRight');
+        await page.waitForTimeout(1000);
+        const afterRight = await page.textContent('#map-name');
+        console.log('  After ArrowRight:', afterRight);
+        if (afterRight === currentMapName) {
+            throw new Error('Map should change with ArrowRight in menu');
+        }
+        await page.keyboard.press('ArrowLeft');
+        await page.waitForTimeout(1000);
+        const afterLeft = await page.textContent('#map-name');
+        console.log('  After ArrowLeft:', afterLeft);
+        if (afterLeft === afterRight) {
+            throw new Error('Map should change with ArrowLeft in menu');
+        }
+        console.log('  PASS: Keyboard arrow navigation works');
+        passed++;
         
         console.log('Test 3: Clicking Start begins game');
         

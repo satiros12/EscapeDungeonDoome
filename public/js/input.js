@@ -11,6 +11,19 @@ document.addEventListener('keydown', e => {
         return;
     }
 
+    if (gameState === 'menu') {
+        if (e.code === 'ArrowRight') {
+            e.preventDefault();
+            selectNextMap();
+            return;
+        }
+        if (e.code === 'ArrowLeft') {
+            e.preventDefault();
+            selectPrevMap();
+            return;
+        }
+    }
+
     if (e.code === 'Escape' && gameState === 'playing') {
         e.preventDefault();
         pauseGame();

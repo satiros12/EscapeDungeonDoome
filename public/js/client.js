@@ -2,6 +2,7 @@ let ws = null;
 let fps = 0;
 let frameCount = 0;
 let lastFpsTime = 0;
+let currentMapName = 'Base Map';
 
 function connectWebSocket() {
     const statusEl = document.getElementById('connection-status');
@@ -15,11 +16,17 @@ function connectWebSocket() {
             statusEl.classList.add('connected');
             statusEl.classList.remove('hidden');
             ws.send(JSON.stringify({ type: 'get_state' }));
+            ws.send(JSON.stringify({ type: 'get_maps' }));
         };
         
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                
+                if (data.type === 'maps_list' || data.type === 'map_changed' || data.type === 'map_selected') {
+                    updateMapSelector(data);
+                    return;
+                }
                 
                 if (data.game_state !== undefined) {
                     gameState = data.game_state;
@@ -85,3 +92,48 @@ function updateFPS(timestamp) {
 function getWebSocket() {
     return ws;
 }
+
+function updateMapSelector(data) {
+    const nameEl = document.getElementById('map-name');
+    const descEl = document.getElementById('map-desc');
+    
+    const mapName = data.map_name || data.current_map_name || 'Unknown';
+    currentMapName = mapName;
+    
+    if (nameEl) {
+        nameEl.textContent = mapName;
+    }
+    
+    if (descEl) {
+        const descriptions = {
+            'Base Map': 'Classic corridors',
+            'Arena': 'Open combat arena',
+            'Maze': 'Complex maze layout',
+            'Arena 2': 'Large arena with pillars'
+        };
+        descEl.textContent = descriptions[mapName] || '';
+    }
+}
+
+function selectPrevMap() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'prev_map' }));
+    }
+}
+
+function selectNextMap() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'next_map' }));
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const prevBtn = document.getElementById('prevMap');
+    const nextBtn = document.getElementById('nextMap');
+    if (prevBtn) {
+        prevBtn.addEventListener('click', selectPrevMap);
+    }
+    if (nextBtn) {
+        nextBtn.addEventListener('click', selectNextMap);
+    }
+});

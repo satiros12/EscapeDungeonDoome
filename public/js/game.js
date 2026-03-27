@@ -79,6 +79,19 @@ class Game {
 
         if (this.consoleOpen) return;
 
+        if (this.state.getGameState() === 'menu') {
+            if (e.code === 'ArrowRight') {
+                e.preventDefault();
+                this._selectNextMap();
+                return;
+            }
+            if (e.code === 'ArrowLeft') {
+                e.preventDefault();
+                this._selectPrevMap();
+                return;
+            }
+        }
+
         if (e.code === 'Escape' && this.state.getGameState() === 'playing') {
             e.preventDefault();
             this.pause();
