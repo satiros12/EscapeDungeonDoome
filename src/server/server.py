@@ -2,6 +2,7 @@
 """WebDoom MVP - HTTP + WebSocket Server with Game Loop"""
 
 import os
+import sys
 import json
 import threading
 from datetime import datetime
@@ -11,13 +12,18 @@ import http.server
 import socketserver
 import asyncio
 
-PROJECT_ROOT = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
+SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(SERVER_DIR))
+sys.path.insert(0, SERVER_DIR)
 os.chdir(PROJECT_ROOT)
 
-from game_state import GameState, GameConfig
+from game_state import GameState, GameConfig, Corpse
 from game_logic import GameLogic
+
+try:
+    from game_engine import GameEngine
+except ImportError:
+    GameEngine = None
 
 LOG_FILE = os.path.join(PROJECT_ROOT, "game.log")
 
@@ -59,6 +65,12 @@ class GameServer:
         self.ws_port = ws_port
         self.state = GameState()
         self.logic = GameLogic(self.state)
+        
+        if GameEngine:
+            self.engine = GameEngine(self.state)
+        else:
+            self.engine = None
+        
         self.clients = set()
         self.running = False
 
@@ -69,6 +81,8 @@ class GameServer:
             print(f"[{level}] {msg}")
 
         self.logic.set_logger(server_log)
+        if self.engine:
+            self.engine.set_logger(server_log)
 
     async def handle_client(self, websocket, path=""):
         """Handle individual client WebSocket connection"""
@@ -223,7 +237,10 @@ class GameServer:
             while self.running:
                 if self.state.game_state == "playing":
                     dt = 1.0 / 60
-                    self.logic.update(dt)
+                    if self.engine:
+                        self.engine.update(dt)
+                    else:
+                        self.logic.update(dt)
 
                 await self.broadcast_state()
                 await asyncio.sleep(1 / 60)

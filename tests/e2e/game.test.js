@@ -8,10 +8,19 @@ const BASE_URL = `http://localhost:${SERVER_PORT}`;
 let server;
 
 async function startServer() {
+    const venvPython = path.join(__dirname, '../..', '.venv/bin/python');
     return new Promise((resolve, reject) => {
-        server = spawn('python3', ['src/server/server.py'], {
+        server = spawn(venvPython, ['src/server/server.py'], {
             cwd: path.join(__dirname, '../..'),
             stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        server.stdout.on('data', (data) => {
+            console.log('Server stdout:', data.toString());
+        });
+        
+        server.stderr.on('data', (data) => {
+            console.log('Server stderr:', data.toString());
         });
         server.on('error', reject);
         let attempts = 0;
