@@ -1,97 +1,92 @@
 # AGENTS.md
 
-## Proyecto: WebDoom MVP - FPS Melee
+## Proyecto: WebDoom - FPS Melee
 
 ### Stack
-- HTML5 Canvas + JavaScript vanilla (en public/index.html)
-- Python 3 + websockets + asyncio (en src/server/)
+- HTML5 Canvas + JavaScript vanilla
+- Python 3 + websockets + asyncio
 - Raycasting para gráficos pseudo-3D (estilo DOOM)
-- Estructura modular: servidor separado del cliente
+- Arquitectura modular: servidor separado del cliente
 
 ### Normas de código
 1. Usa APIs modernas de Canvas y requestAnimationFrame
 2. Gráficos simplificados: paredes de colores sólidos, enemigos como sprites 2D
 3. Código conciso, sin sobreingeniería
 4. Commit tras cada fase completada
-5. Tests E2E con Playwright para verificar flujo de juego
-6. Nunca hagas kill de todo python.
+5. Tests E2E con Playwright + Tests unitarios con pytest
+6. Nunca hagas kill de todo python
 7. Estructura: public/ (frontend), src/server/ (backend), tests/ (tests)
 
-### Arquitectura
+### Arquitectura Actual (V2)
 ```
 WebDoom/
-├── public/           # Frontend estático
-│   └── index.html   # Cliente HTML5 Canvas
-├── src/server/      # Servidor Python
-│   ├── server.py    # HTTP + WebSocket server
-│   ├── game_logic.py # IA, combate, movimiento
-│   ├── game_state.py # Entidades, estado
-│   └── physics.py   # Colisiones
+├── public/                  # Frontend estático
+│   ├── index.html          # Cliente HTML5 Canvas
+│   └── js/
+│       ├── main.js         # Entry point
+│       ├── game.js         # Game facade
+│       ├── core/           # Patrones (Observable, GameState)
+│       ├── renderer.js     # Raycasting + sprites
+│       ├── ui.js          # Menús, HUD
+│       ├── input.js       # Manejo de teclas
+│       └── client.js      # WebSocket client
+├── src/server/             # Servidor Python
+│   ├── server.py           # HTTP + WebSocket server
+│   ├── game_engine.py      # GameEngine facade
+│   ├── game_logic.py      # Lógica original (compatibilidad)
+│   ├── game_state.py      # Entidades, estado
+│   ├── physics.py         # Colisiones, línea de vista
+│   ├── core/              # Interfaces abstractas
+│   └── systems/           # Sistemas modulares
+│       ├── player_system.py
+│       ├── enemy_ai_system.py
+│       └── combat_system.py
+├── shared/                 # Constantes compartidas
+│   ├── constants.py
+│   ├── constants.js
+│   └── map-data.json
 ├── tests/
-│   └── e2e/         # Tests E2E con Playwright
-├── docs/            # Documentación
-├── package.json     # Dependencias npm (Playwright)
-└── requirements.txt # Dependencias Python
-
-### Normas de código
-1. Usa APIs modernas de Canvas y requestAnimationFrame
-2. Gráficos simplificados: paredes de colores sólidos, enemigos como sprites 2D
-3. Código conciso, sin sobreingeniería
-4. Commit tras cada fase completada
-5. Tests E2E con Playwright para verificar flujo de juego
-6. Logging a consola y fichero `game.log` con eventos importantes
-7. Nunca hagas kill de todo python.
+│   ├── unit/              # Tests unitarios pytest
+│   └── e2e/               # Tests E2E Playwright
+└── docs/                  # Documentación
+```
 
 ### Estados de juego
-1. `menu` - Pantalla inicial con título y botón "Start"
+1. `menu` - Pantalla inicial
 2. `playing` - Partida en curso
-3. `victory` - Pantalla de victoria (todos los enemigos eliminados)
-4. `defeat` - Pantalla de derrota (vida jugador a 0%)
+3. `victory` - Victoria (todos enemigos eliminados)
+4. `defeat` - Derrota (jugador muerto)
 
 ### Mecánicas de combate
 - **Vida jugador**: 100 HP
-- **Vida enemigos**: 30 HP cada uno (3 enemigos = 90 HP total)
-- **Daño al golpear**: 10 HP por golpe
-- **Rango de ataque**: distancia < 1.5 unidades
-- **Velocidad ataque**: 0.5 segundos de cooldown
-- **Velocidad movimiento**: media
-
-### Feedback visual
-- Flash rojo en pantalla cuando el jugador recibe daño
-- Enemigos muestran animación de muerte
-- Cadáver del enemigo permanece en el mapa tras morir
+- **Vida enemigos**: 30 HP (3 enemigos)
+- **Daño al golpear**: 10 HP
+- **Rango de ataque**: < 1.5 unidades
+- **Cooldown**: 0.5 segundos
 
 ### Controles
 | Tecla | Acción |
 |-------|--------|
-| W | Movimiento hacia adelante |
-| S | Movimiento hacia atrás |
+| W | Movimiento adelante |
+| S | Movimiento atrás |
 | A | Strafe izquierdo |
 | D | Strafe derecho |
-| Flecha Izquierda | Rotar cámara izquierda |
-| Flecha Derecha | Rotar cámara derecha |
-| Espacio | Atacar (golpe cuerpo a cuerpo) |
+| ← | Rotar izquierda |
+| → | Rotar derecha |
+| Espacio | Atacar |
+| ESC | Pausa |
+| ALT+P | Consola |
 
-### Estructura de datos
+### Tests
+```bash
+# Unit tests
+.venv/bin/python -m pytest tests/unit/ -v
 
-**Jugador**
+# E2E tests
+node tests/e2e/game.test.js
 ```
-{ x, y, angle, health: 100, attackCooldown: 0 }
-```
 
-**Enemigo**
+### Ejecutar servidor
+```bash
+.venv/bin/python src/server/server.py
 ```
-{ x, y, angle, health: 30, state: 'patrol'|'chase'|'attack'|'dying'|'dead', deathTimer: 0 }
-```
-
-**Mapa**: Array 2D de strings con caracteres:
-- `#` = pared
-- `.` = suelo transitable
-- `P` = posición inicial jugador
-- `E` = posición enemigos
-
-### Flujo de datos
-1. Cliente envía input (teclas) al servidor via WebSocket
-2. Servidor procesa lógica (movimiento, IA, combate)
-3. Servidor envía estado actualizado al cliente
-4. Cliente renderiza el estado
