@@ -32,17 +32,15 @@ function updateHUD() {
     const weaponNameEl = document.getElementById('weapon-name');
     const ammoCountEl = document.getElementById('ammo-count');
     if (weaponNameEl && player.current_weapon) {
-        weaponNameEl.textContent = player.current_weapon.toUpperCase();
+        const weaponNames = {
+            'fists': 'PUÑOS',
+            'sword': 'ESPADA',
+            'axe': 'HACHA'
+        };
+        weaponNameEl.textContent = weaponNames[player.current_weapon] || player.current_weapon.toUpperCase();
     }
-    if (ammoCountEl && player.ammo) {
-        const weapon = player.current_weapon || 'fists';
-        if (weapon === 'shotgun') {
-            ammoCountEl.textContent = player.ammo.shotgun !== undefined ? player.ammo.shotgun : 0;
-        } else if (weapon === 'chaingun') {
-            ammoCountEl.textContent = player.ammo.chaingun !== undefined ? player.ammo.chaingun : 0;
-        } else {
-            ammoCountEl.textContent = '∞';
-        }
+    if (ammoCountEl) {
+        ammoCountEl.textContent = '∞';
     }
 }
 

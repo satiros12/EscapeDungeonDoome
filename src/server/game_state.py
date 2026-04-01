@@ -173,9 +173,7 @@ class Player:
     god_mode: bool = False
     speed_multiplier: float = 1.0
     current_weapon: str = "fists"
-    ammo: Dict[str, int] = field(
-        default_factory=lambda: {"shotgun": 50, "chaingun": 200}
-    )
+    ammo: Dict[str, int] = field(default_factory=lambda: {})
     armor: int = 0
     armor_type: str = "none"  # "none", "light", "heavy"
 
@@ -201,7 +199,7 @@ class Player:
         self.health = GameConfig.PLAYER_MAX_HEALTH
         self.attack_cooldown = 0
         self.current_weapon = "fists"
-        self.ammo = {"shotgun": 50, "chaingun": 200}
+        self.ammo = {}
         self.armor = 0
         self.armor_type = "none"
 

@@ -10,9 +10,8 @@ class WeaponType:
     """Weapon type identifiers"""
 
     FISTS = "fists"
-    CHAINSAW = "chainsaw"
-    SHOTGUN = "shotgun"
-    CHAINGUN = "chaingun"
+    SWORD = "sword"
+    AXE = "axe"
 
 
 @dataclass
@@ -38,9 +37,8 @@ class WeaponSystem:
 
     WEAPONS = {
         "fists": Weapon("Fists", 10, 1.5, 0.5),
-        "chainsaw": Weapon("Chainsaw", 25, 1.5, 0.2),
-        "shotgun": Weapon("Shotgun", 10, 8.0, 1.0, True, 8, "shotgun"),
-        "chaingun": Weapon("Chaingun", 8, 15.0, 0.1, True, 1, "chaingun"),
+        "sword": Weapon("Fast Sword", 15, 1.8, 0.3),
+        "axe": Weapon("Great Axe", 30, 2.0, 0.8),
     }
 
     def __init__(self, state):
@@ -48,17 +46,9 @@ class WeaponSystem:
         self.current_weapon = "fists"
 
     def set_weapon(self, weapon_name: str) -> bool:
-        """Set current weapon if valid and player has ammo"""
+        """Set current weapon if valid"""
         if weapon_name not in self.WEAPONS:
             return False
-
-        weapon = self.WEAPONS[weapon_name]
-
-        # Check ammo for weapons that need it
-        if weapon.ammo_type != "none":
-            ammo = self.state.player.ammo.get(weapon.ammo_type, 0)
-            if ammo <= 0:
-                return False
 
         self.current_weapon = weapon_name
         self.state.player.current_weapon = weapon_name

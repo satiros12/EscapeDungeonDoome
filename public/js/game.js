@@ -191,13 +191,12 @@ class Game {
 
         if (this.paused || this.state.getGameState() !== 'playing') return;
 
-        // Weapon change with keys 1-4
-        if (['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) {
+        // Weapon change with keys 1-3
+        if (['Digit1', 'Digit2', 'Digit3'].includes(e.code)) {
             const weaponMap = {
                 'Digit1': 'fists',
-                'Digit2': 'chainsaw',
-                'Digit3': 'shotgun',
-                'Digit4': 'chaingun'
+                'Digit2': 'sword',
+                'Digit3': 'axe'
             };
             this._sendWeaponChange(weaponMap[e.code]);
             return;
