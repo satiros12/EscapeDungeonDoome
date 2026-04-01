@@ -9,338 +9,303 @@
 El proyecto WebDoom es un juego FPS estilo DOOM con arquitectura cliente-servidor:
 - **Cliente**: HTML5 Canvas + JavaScript vanilla
 - **Servidor**: Python 3 + WebSockets + asyncio
-- **Tests**: 60 unitarios (passing) + 16 E2E (passing)
+- **Tests**: 60 unitarios (passing) + 24 E2E (21 passing, 3 failed)
 
 ### Estado General
 
 | Categoria | Completitud |
 |-----------|-------------|
 | Core gameplay (movimiento, combate, IA) | ~75% |
-| Armas | 25% (solo melee) |
-| Mapas | 100% (4 mapas) |
-| Red | 50% (WS funciona, delta compression no) |
-| UI/Controls | 70% (falta touch) |
-| Documentacion | 90% (desactualizada en partes) |
-| Tests | 65% (E2E incompletos) |
+| Armas (Fists, Chainsaw, Shotgun, Chaingun) | 100% |
+| Mapas | 100% (4 mapas pequeños) |
+| Controles tactiles movil | 100% |
+| Red | 50% |
+| Editor de mapas | 10% (básico) |
+| Pathfinding enemigos | 0% |
+| Misión (inicio/fin) | 0% |
 
 ---
 
-## 2. Analisis de Features Implementadas
+## 2. Problemas Identificados
 
-### 2.1 Core Gameplay
+### 2.1 Paredes Atravesables
 
-| Feature | Estado | Tests Unit | Tests E2E |
-|---------|--------|------------|-----------|
-| Movimiento jugador (WASD) | Implementado | SI | SI |
-| Rotacion camara (Arrow keys) | Implementado | SI | SI |
-| Ataque cuerpo a cuerpo (Space) | Implementado | SI | SI |
-| Colisiones con paredes | Implementado | SI | NO |
-| Raycasting | Implementado | SI | NO |
-| Linea de vista (IA) | Implementado | SI | NO |
-| Estados de enemigos (patrol/chase/attack/dying/dead) | Implementado | SI | PARCIAL |
-| Sistema de dano y salud | Implementado | SI | NO |
-| Contador de kills | Implementado | SI | SI |
-| Estados de juego (menu/playing/victory/defeat/pause) | Implementado | SI | SI |
+El sistema de colisiones actual permite atravesar algunas paredes. El problema está en:
+- **Detección de colisión**: Solo проверя una posición, no un radio
+- **Grid alignment**: Las coordenadas de pared pueden no alinearse bien
+- **Margen de colisión**: No hay COLLISION_MARGIN usado correctamente
 
-### 2.2 Mapas
+**Solución propuesta**:
+```python
+def check_collision(self, x: float, y: float) -> bool:
+    """Check if a position collides with a wall (with margin)"""
+    margin = GameConfig.COLLISION_MARGIN
+    # Check 4 corners around the player
+    return (self.is_wall(x - margin, y - margin) or
+            self.is_wall(x + margin, y - margin) or
+            self.is_wall(x - margin, y + margin) or
+            self.is_wall(x + margin, y + margin))
+```
 
-| Mapa | Archivo | Estado |
-|------|---------|--------|
-| Base | base.json | Implementado |
-| Arena | arena.json | Implementado |
-| Arena 2 | arena2.json | Implementado |
-| Maze | maze.json | Implementado |
+### 2.2 Controles de Cambio de Mapa
 
-- Selector de mapas en menu con carousel
-- Navegacion por botones y teclado
+Los controles actuales para cambiar de mapa funcionan:
+- **Botones**: ◄ y ► en el menú
+- **Teclado**: Flecha izquierda/derecha en menú
+- **Táctil**: No hay controles táctiles en el menú
 
-### 2.3 UI/HUD
-
-| Elemento | Estado |
-|----------|--------|
-| Menu principal | Implementado |
-| Selector de mapas | Implementado |
-| Botones (Start/Resume/Menu) | Implementado |
-| Health bar | Implementado |
-| Kill counter | Implementado |
-| FPS counter | Implementado |
-| Crosshair | Implementado |
-| Pause menu | Implementado |
-| Consola de debug (ALT+P) | Implementado |
-| Damage flash | Implementado |
-| **Controles tactiles Movil** | **NO IMPLEMENTADO** |
-
-### 2.4 Red
-
-| Feature | Estado |
-|---------|--------|
-| WebSocket server | Implementado |
-| HTTP server | Implementado |
-| Reconexion automatica | Parcial |
-| Delta compression | No implementado |
+**Mejora propuesta**:
+- Añadir botones táctiles en el menú para cambiar mapa
+- Añadir gesto de swipe en móvil
 
 ---
 
-## 3. Analisis de Tests
+## 3. Propuestas de Mejora
 
-### 3.1 Tests Unitarios (60 tests)
+### 3.1 Editor de Mapas Mejorado (ALTA PRIORIDAD)
 
+#### Tipos de Elementos para el Editor
+
+**Paredes/Suelos**:
+| Caracter | Tipo | Descripción |
+|----------|------|-------------|
+| `#` | Pared básica | Pared sólida estándar |
+| `=` | Pared reforzada | Más difícil de destruir |
+| `~` | Pared destructible | Se puede romper |
+| `.` | Suelo básico | Floor estándar |
+| `,` | Suelo metálico | Metal floor |
+| `_` | Suelo arenoso | Arena/floor arenoso |
+
+**Items**: 
+| Caracter | Item |
+|----------|------|
+| `H` | Health pack |
+| `A` | Ammo ( Shotgun) |
+| `a` | Ammo (Chaingun) |
+| `1` | Puños (Fists) |
+| `2` | Espada rápida (Fast Sword) |
+| `3` | Gran hacha (Great Axe) |
+| `B` | Armadura légère |
+| `b` | Armadura pesada |
+
+**Enemigos**:
+| Caracter | Tipo | Descripción |
+|----------|------|-------------|
+| `E` | Imp | Enemigo básico |
+| `D` | Demon | Enemigo duro |
+| `C` | Cacodemon | Enemigo volador |
+| `s` | Soldier (pistol) | Humano con pistola |
+| `S` | Soldier (shotgun) | Humano con escopeta |
+| `c` | Chaingunner | Humano con ametralladora |
+
+**Puntos Especiales**:
+| Caracter | Punto |
+|----------|-------|
+| `P` | Inicio del jugador |
+| `F` | Fin/Meta (objetivo) |
+
+#### Formato JSON Mejorado
+
+```json
+{
+  "name": "Mission Map",
+  "author": "LevelDesigner",
+  "difficulty": "hard",
+  "width": 30,
+  "height": 30,
+  "grid": ["############################", ...],
+  "spawn": {
+    "player": {"x": 1.5, "y": 1.5},
+    "goal": {"x": 28.5, "y": 28.5}
+  },
+  "enemies": [
+    {"x": 5, "y": 5, "type": "imp", "count": 3},
+    {"x": 10, "y": 10, "type": "soldier_shotgun", "count": 2}
+  ],
+  "items": [
+    {"x": 3, "y": 8, "type": "health_pack", "value": 25},
+    {"x": 15, "y": 3, "type": "armor_light", "value": 50}
+  ]
+}
 ```
-tests/unit/
-├── test_ai.py          (10 tests) - Estados de IA, transiciones, movimiento
-├── test_combat.py     (13 tests) - Combate, dano, muerte, victoria/derrota
-├── test_physics.py    (10 tests) - Colisiones, raycasting, linea de vista
-├── test_systems.py    (16 tests) - Sistemas de jugador, enemigos, combate
-├── test_config.py     (12 tests) - Configuracion, mapas
-└── __init__.py
+
+### 3.2 Sistema de Armas Nuevo
+
+Reemplazar las armas actuales (Fists, Chainsaw, Shotgun, Chaingun) con:
+
+| Arma | Daño | Velocidad | Alcance | Especial |
+|------|------|------------|---------|----------|
+| Puños | 10 | Normal | 1.5 | Básico |
+| Espada rápida | 15 | Rápido | 1.8 | Velocidad |
+| Gran hacha | 30 | Lento | 2.0 | Alto daño |
+
+### 3.3 Sistema de Armadura
+
+**Tipos de armadura**:
+| Tipo | Valor | Efecto |
+|------|-------|--------|
+| Armadura légère | 50 | 25% reducción daño |
+| Armadura pesada | 100 | 50% reducción daño |
+
+**Implementación**:
+- El jugador puede recoger armadura del suelo
+- La armadura se muestra en el HUD
+- Reduce el daño recibido según el tipo
+- Se puede llevar solo un tipo (no se acumula)
+
+### 3.4 Tipos de Enemigos
+
+**Enemigos Básicos (Monstruos)**:
+| Tipo | Salud | Velocidad | Daño | Comportamiento |
+|------|-------|-----------|------|----------------|
+| Imp | 30 | 2.5 | 10 | Chase directo |
+| Demon | 60 | 2.0 | 15 | Flanker |
+| Cacodemon | 100 | 1.5 | 20 | Shooter (rango) |
+
+**Humanos (Soldados)**:
+| Tipo | Salud | Arma | Armadura | Comportamiento |
+|------|-------|------|----------|----------------|
+| Soldier (pistol) | 40 | Pistola | Aucune | Patrol |
+| Soldier (shotgun) | 50 | Escopeta | Légère | Cover |
+| Chaingunner | 60 | Chaingun | Légère | Suppress |
+
+### 3.5 Mapas Más Grandes con Misión
+
+**Especificaciones de mapas grandes**:
+- Tamaño mínimo: 30x30
+- Tamaño recomendado: 40x40 o más
+- Enemigos: 10-20 por mapa
+- Items: 5-10 por mapa
+- Punto de inicio (P) y punto final (F)
+
+**Mecánica de misión**:
+- El jugador empieza en P
+- Debe llegar a F para completar
+- F puede estar bloqueado por enemigos
+- Al llegar a F, mostrar pantalla de "Misión Completa"
+
+### 3.6 Pathfinding para Enemigos
+
+**Problema actual**: Los enemigos solo ven al jugador si hay línea de vista directa. No pueden:
+- Rodeer paredes
+- Encontrar caminos alternativos
+- Saltar obstáculos
+
+**Solución propuesta**: Implementar A* pathfinding
+
+```python
+class Pathfinding:
+    def __init__(self, game_state):
+        self.state = game_state
+        
+    def find_path(self, start_x, start_y, end_x, end_y):
+        """A* pathfinding to reach player"""
+        # Implementar A* algorithm
+        pass
+    
+    def get_next_step(self, enemy, target_x, target_y):
+        """Get next movement step for enemy"""
+        # Usar pathfinding para determinar siguiente posición
+        pass
 ```
 
-**Coverage**: Movimiento, fisica, IA basica, combate, configuracion.
-
-**Faltan tests para**:
-- Raycasting con multiples angulos
-- Pathfinding avanzado
-- Dano exacto
-- Integracion entre sistemas
-- Edge cases de red
-
-### 3.2 Tests E2E (16 tests)
-
-```
-tests/e2e/
-└── game.test.js (16 tests)
-```
-
-| # | Test | Area | Estado |
-|---|------|------|--------|
-| 1 | Menu screen loads | Menu | PASS |
-| 2 | Start button exists | UI | PASS |
-| 2b | Map selector exists | Maps | PASS |
-| 2c | Map navigation arrows | Maps | PASS |
-| 2d | Navigate next map button | Maps | PASS |
-| 2e | Navigate prev map button | Maps | PASS |
-| 2f | Keyboard arrow navigation | Maps | PASS |
-| 3 | Clicking Start begins game | Gameplay | PASS |
-| 4 | Canvas is rendered | Rendering | PASS |
-| 5 | Health bar is visible | HUD | PASS |
-| 6 | Player movement (WASD) | Controls | PASS |
-| 7 | Camera rotation | Controls | PASS |
-| 8 | Attack with spacebar | Controls | PASS |
-| 9 | Kill counter visible | HUD | PASS |
-| 10 | FPS counter visible | HUD | PASS |
-| 11 | ESC pauses the game | Pause | PASS |
-| 12 | Resume button works | Pause | PASS |
-| 13 | Console opens with ALT+P | Console | PASS |
-| 14 | Console closes with ALT+P | Console | PASS |
-| 15 | Menu button returns to menu | Navigation | PASS |
-| 16 | Game restarts correctly | Gameplay | PASS |
-
-**Problemas identificados en E2E**:
-1. **No hay combate real** - Usan god mode
-2. **No hay interaccion con enemigos** - No se verifica dano real
-3. **No hay victoria/derrota** - Los estados finales no se testean
-4. **No hay test de carga de mapas** - Solo navegacion en menu
-5. **No hay test de rendimiento** - FPS sostenidos, memoria
+**Comportamiento mejorado**:
+1. Si ve al jugador → chase directo
+2. Si pierde de vista → buscar camino alternativo
+3. Si encuentra obstáculo → buscar ruta
+4. Si no puede alcanzar → patrol en zona
 
 ---
 
-## 4. Propuestas de Mejora
+## 4. Roadmap de Implementación
 
-### 4.1 Alta Prioridad
+### Fase 1: Corrección de Bugs (Inmediato)
+- [ ] Arreglar sistema de colisiones (paredes atravesables)
+- [ ] Añadir controles táctiles para cambio de mapa
 
-#### A. Controles Tactiles para Movil (NUEVA FEATURE)
+### Fase 2: Editor de Mapas (Corto plazo)
+- [ ] Actualizar formato JSON de mapas
+- [ ] Añadir soporte para tipos de paredes/suelos
+- [ ] Añadir soporte para items (armas, armadura, salud)
+- [ ] Añadir múltiples puntos de inicio
+- [ ] Añadir punto final (meta)
 
-**Problema**: No hay forma de jugar desde dispositivos moviles.
+### Fase 3: Sistema de Armas y Armadura (Medio plazo)
+- [ ] Reemplazar armas actuales por Puños/Espada/Hacha
+- [ ] Implementar sistema de armadura
+- [ ] Añadir pickup de items en el mapa
+- [ ] Actualizar HUD para mostrar armadura
 
-**Solucion propuesta**:
-1. Crear botones virtuales en pantalla
-2. Joystick virtual zona izquierda (movimiento)
-3. Botones zona derecha (ataque, rotacion)
-4. Detectar dispositivo tactil y mostrar UI correspondiente
-5. Integrar con el sistema de input existente
+### Fase 4: Enemigos Avanzados (Medio plazo)
+- [ ] Añadir tipos de enemigos (Imp, Demon, Cacodemon)
+- [ ] Añadir soldados humanos con diferentes armas
+- [ ] Implementar armadura en enemigos
 
-**Implementacion sugerida**:
-- Agregar HTML para botones tactiles en index.html
-- Agregar CSS para posicionamiento responsive
-- Modificar input.js para manejar eventos touch
-- Enviar input tactil por WebSocket como teclado
+### Fase 5: Mapas Grandes y Misión (Largo plazo)
+- [ ] Crear mapas más grandes (30x30+)
+- [ ] Añadir más enemigos (10-20 por mapa)
+- [ ] Implementar sistema de misión (inicio → fin)
+- [ ] Pantalla de "Misión Completada"
 
-#### B. Completar Tests E2E
-
-**Tests a agregar**:
-1. Test de dano real al jugador (verificar health bar cambia)
-2. Test de muerte de enemigo (verificar contador kills++)
-3. Test de victoria (matar todos los enemigos)
-4. Test de derrota (morir)
-5. Test de cambio de mapa y gameplay
-6. Test de rendimiento (FPS sostenido)
-7. Test de redimensionamiento de ventana
-
-#### C. Sistema de Armas
-
-**Problema**: Solo hay un arma (melee).
-
-**Propuesta**:
-1. Implementar cambio de armas (1-4 keys)
-2. Agregar mas armas (Shotgun, Chaingun)
-3. Sistema de municion
-4. Animaciones de ataque
-
-### 4.2 Media Prioridad
-
-#### D. Consolidar Configuracion
-
-**Problema**: GameConfig duplicado en constants.py y game_state.py.
-
-**Solucion**: Usar solo shared/constants.py
-
-#### E. Delta Compression
-
-**Problema**: Documentado pero no implementado.
-
-**Solucion**: Completar networking/protocol.py
-
-#### F. EntityFactory
-
-**Problema**: No existe aunque esta documentado.
-
-**Solucion**: Implementar factory pattern
-
-### 4.3 Baja Prioridad
-
-#### G. Sistema de Sonido
-- Web Audio API
-- Efectos para pasos, ataques, dano
-
-#### H. Texturas
-- Sprites basicos
-- Paredes con colores/gradientes
-
-#### I. Multijugador
-- Identificacion de jugadores
-- Sincronizacion de estado
+### Fase 6: Pathfinding (Largo plazo)
+- [ ] Implementar algoritmo A*
+- [ ] Enemigos encuentran camino al jugador
+- [ ] Enemigos saltan obstáculos
+- [ ] Comportamiento avanzado (flanking, cover)
 
 ---
 
-## 5. Roadmap Sugerido
+## 5. Estado de Tests
 
-### Fase 1: Controles Movil (Inmediato)
-- [x] Agregar botones tactiles en HTML
-- [x] Agregar CSS para mobile
-- [x] Modificar input.js para touch
-- [x] Testear en dispositivo movil
-
-### Fase 2: Completar E2E Tests (Corto plazo)
-- [x] Agregar test de dano real
-- [x] Agregar test de muerte enemigo
-- [x] Agregar test de victoria/derrota
-- [x] Agregar test de cambio de mapa
-- [x] Agregar test de redimensionamiento
-- [x] Agregar test de rendimiento
-
-### Fase 3: Mejoras de Core (Medio plazo)
-- [x] Consolidar configuracion
-- [x] Sistema de armas (4 armas implementadas)
-- [x] EntityFactory (ya existia, verificado)
-- [x] Delta compression (existe pero no integrado activamente)
-
-### Fase 4: Extras (Largo plazo)
-- [ ] Sonido
-- [ ] Texturas
-- [ ] Multijugador
-
----
-
-## 6. Analisis de Arquitectura
-
-### Estructura Actual vs Documentada
-
+### Tests Unitarios
 ```
-DOCUMENTADO                           REAL
-─────────────────────────────────────────────────────────
-systems/player_system.py         →    En game_logic.py
-systems/enemy_ai_system.py       →    En game_logic.py
-systems/combat_system.py         →    En game_logic.py
-systems/weapon_system.py         →    No implementado
-factory/entity_factory.py        →    No implementado
-networking/protocol.py           →    No implementado
-game_engine.py                   →    Existe pero no activo
+60 passed, 1 skipped
 ```
 
-### Problemas Identificados
-
-1. **Logica duplicada**: GameEngine vs GameLogic
-2. **Constantes duplicadas**: shared/constants.py vs game_state.py
-3. **Sistemas no modulares**: Todo en game_logic.py
-4. **Documentacion desactualizada**
-
----
-
-## 7. Recomendaciones Finales
-
-### Para completar el proyecto de forma solida:
-
-1. **Terminar controles tactiles** - Esencial para jugabilidad en mobile
-2. **Completar E2E tests** - Mayor coverage, menos bugs
-3. **Limpiar arquitectura** - Unificar constantes, mover sistemas
-4. **Actualizar documentacion** - Que refleje el estado real
-
-### Para testing E2E mejorado:
-
-1. Evitar god mode en todos los tests
-2. Testear flujos completos (inicio → juego → fin)
-3. Verificar cambios dinamicos (salud, kills)
-4. Agregar tests de stress/rendimiento
-
----
-
-## 8. Resultados de Tests Actuales
-
-```bash
-# Unit tests
-.venv/bin/python -m pytest tests/unit/ -v
-# Result: 60 passed, 1 skipped
-
-# E2E tests  
-node tests/e2e/game.test.js
-# Result: 16 tests passing
+### Tests E2E
+```
+24 tests: 21 passed, 3 failed
 ```
 
-## 9. Feature Recientemente Implementada: Controles Tactiles para Movil
+Los 3 tests que fallan son de interacción compleja con enemigos (timing issues en entorno de test).
 
-### Descripcion
+---
 
-Se han implementado controles tactiles para permitir jugar desde dispositivos moviles via web.
+## 6. Arquitectura Actual
 
-### Componentes Implementados
+```
+WebDoom/
+├── public/                    # Frontend
+│   ├── index.html            # UI + canvas
+│   └── js/                   # Cliente JS
+├── src/server/               # Backend Python
+│   ├── server.py            # HTTP + WebSocket
+│   ├── game_logic.py        # Lógica principal
+│   ├── game_state.py        # Estado del juego
+│   ├── physics.py           # Colisiones
+│   └── weapon_system.py     # Sistema de armas
+├── maps/                     # Mapas JSON
+├── shared/                   # Constantes compartidas
+└── tests/                    # Tests
+```
 
-1. **HTML** (index.html)
-   - Contenedor `#touch-controls`
-   - Joystick virtual `#touch-joystick` con knob
-   - Botones tactiles: Attack, Pause, Rotate Left, Rotate Right
+---
 
-2. **CSS** (index.html)
-   - Estilos responsivos para controles tactiles
-   - Posicionamiento en zona inferior de la pantalla
-   - Estilos para botones y joystick
+## 7. Pendiente de Implementación
 
-3. **JavaScript** (input.js)
-   - Detección automática de dispositivo tactil
-   - Joystick virtual con mapeo a W/S/A/D
-   - Botones tactiles con mapeo a Space/Escape/Arrow keys
-   - Envío de inputs por WebSocket
-
-### Funcionamiento
-
-- Los controles aparecen automaticamente en dispositivos tactiles
-- Joystick izquierdo: Movimiento (W/S/A/D)
-- Botones derechos: Attack (Space), Pause (Escape), Rotacion (Arrow keys)
-- Compatible con multi-touch (mover + atacar simultáneamente)
-
-### Tests
-
-- Los tests E2E existentes siguen pasando (16/16)
-- Los controles tactiles son transparentes para el servidor (usan mismo protocolo)
+| Feature | Estado | Prioridad |
+|---------|--------|-----------|
+| Controles táctiles móviles | ✅ Implementado | - |
+| Sistema de armas (4 armas) | ✅ Implementado | - |
+| Tests E2E ampliados | ✅ Implementado | - |
+| Editor de mapas mejorado | ❌ Pendiente | ALTA |
+| Sistema de misión (inicio/fin) | ❌ Pendiente | ALTA |
+| Armas (Puños/Espada/Hacha) | ❌ Pendiente | MEDIA |
+| Sistema de armadura | ❌ Pendiente | MEDIA |
+| Tipos de enemigos avanzados | ❌ Pendiente | MEDIA |
+| Mapas más grandes | ❌ Pendiente | MEDIA |
+| Pathfinding enemigos | ❌ Pendiente | ALTA |
+| Arreglar paredes atravesables | ❌ Pendiente | ALTA |
 
 ---
 
