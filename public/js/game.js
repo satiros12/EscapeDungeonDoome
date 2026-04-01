@@ -495,3 +495,13 @@ class Game {
         }
     }
 }
+
+// Initialize the game when DOM is ready
+let game = null;
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        game = new Game();
+    });
+} else {
+    game = new Game();
+}
