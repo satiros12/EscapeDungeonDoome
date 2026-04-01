@@ -2,7 +2,7 @@
 
 import math
 import random
-from game_state import GameState, GameConfig, Enemy, Corpse, HitEffect, Item
+from game_state import GameState, GameConfig, Enemy, Corpse, HitEffect, Item, EnemyType
 from physics import Physics
 from weapon_system import WeaponSystem
 
@@ -13,6 +13,64 @@ class GameLogic:
         self.physics = Physics(state)
         self.weapon_system = WeaponSystem(self.state)
         self.logger = None
+
+        # Enemy type configurations
+        self.enemy_configs = {
+            EnemyType.IMP.value: {
+                "speed": 2.5,
+                "damage": 10,
+                "attack_range": 1.0,
+                "attack_cooldown": 1.0,
+                "detection_range": 5.0,
+                "patrol_speed": 1.0,
+                "behavior": "chase",
+            },
+            EnemyType.DEMON.value: {
+                "speed": 2.0,
+                "damage": 15,
+                "attack_range": 1.2,
+                "attack_cooldown": 1.5,
+                "detection_range": 6.0,
+                "patrol_speed": 0.8,
+                "behavior": "flanker",
+            },
+            EnemyType.CACODEMON.value: {
+                "speed": 1.5,
+                "damage": 20,
+                "attack_range": 3.0,
+                "attack_cooldown": 2.0,
+                "detection_range": 8.0,
+                "patrol_speed": 0.5,
+                "behavior": "shooter",
+            },
+            EnemyType.SOLDIER_PISTOL.value: {
+                "speed": 1.5,
+                "damage": 10,
+                "attack_range": 5.0,
+                "attack_cooldown": 1.0,
+                "detection_range": 6.0,
+                "patrol_speed": 0.8,
+                "behavior": "patrol",
+            },
+            EnemyType.SOLDIER_SHOTGUN.value: {
+                "speed": 1.2,
+                "damage": 20,
+                "attack_range": 4.0,
+                "attack_cooldown": 1.5,
+                "detection_range": 5.0,
+                "patrol_speed": 0.6,
+                "behavior": "cover",
+            },
+            EnemyType.CHAINGUNNER.value: {
+                "speed": 1.0,
+                "damage": 15,
+                "attack_range": 6.0,
+                "attack_cooldown": 0.3,
+                "detection_range": 7.0,
+                "patrol_speed": 0.5,
+                "behavior": "suppress",
+            },
+        }
 
     def set_logger(self, logger):
         """Set logger callback for events"""
@@ -102,7 +160,7 @@ class GameLogic:
             player.attack_cooldown -= dt
 
     def update_enemies(self, dt: float):
-        """Update enemy AI"""
+        """Update enemy AI with different behaviors per enemy type"""
         player = self.state.player
 
         alive_enemies = [
@@ -110,71 +168,303 @@ class GameLogic:
         ]
 
         for enemy in alive_enemies:
+            # Get enemy configuration based on type
+            enemy_type = enemy.enemy_type
+            config = self.enemy_configs.get(enemy_type, self.enemy_configs["imp"])
+
             dx = player.x - enemy.x
             dy = player.y - enemy.y
             dist = math.sqrt(dx * dx + dy * dy)
             angle_to_player = math.atan2(dy, dx)
 
-            can_see = (
-                dist < GameConfig.DETECTION_RANGE
-                and self.physics.has_line_of_sight(enemy.x, enemy.y, player.x, player.y)
+            # Use enemy-specific detection range
+            detection_range = config.get("detection_range", GameConfig.DETECTION_RANGE)
+            can_see = dist < detection_range and self.physics.has_line_of_sight(
+                enemy.x, enemy.y, player.x, player.y
             )
 
-            if enemy.state == "patrol":
-                enemy.x += math.cos(enemy.patrol_dir) * GameConfig.PATROL_SPEED * dt
-                enemy.y += math.sin(enemy.patrol_dir) * GameConfig.PATROL_SPEED * dt
+            behavior = config.get("behavior", "chase")
 
-                if self.physics.is_wall(
-                    enemy.x + math.cos(enemy.patrol_dir) * GameConfig.COLLISION_MARGIN,
-                    enemy.y + math.sin(enemy.patrol_dir) * GameConfig.COLLISION_MARGIN,
-                ):
-                    enemy.patrol_dir += math.pi / 2 + random.random() * math.pi
+            # Handle different behaviors
+            if behavior == "chase":
+                self._update_imp_behavior(
+                    enemy, player, dt, dist, angle_to_player, can_see, config
+                )
+            elif behavior == "flanker":
+                self._update_demon_behavior(
+                    enemy, player, dt, dist, angle_to_player, can_see, config
+                )
+            elif behavior == "shooter":
+                self._update_cacodemon_behavior(
+                    enemy, player, dt, dist, angle_to_player, can_see, config
+                )
+            elif behavior in ("patrol", "cover", "suppress"):
+                self._update_soldier_behavior(
+                    enemy, player, dt, dist, angle_to_player, can_see, config
+                )
+            else:
+                # Default behavior
+                self._update_imp_behavior(
+                    enemy, player, dt, dist, angle_to_player, can_see, config
+                )
 
-                if can_see and dist < GameConfig.DETECTION_RANGE:
-                    enemy.state = "chase"
-                    self.log(f"Enemy spotted player at distance {dist:.2f}")
-
-            elif enemy.state == "chase":
-                if dist > GameConfig.ENEMY_ATTACK_RANGE:
-                    enemy.angle = angle_to_player
-                    new_x = (
-                        enemy.x + math.cos(enemy.angle) * GameConfig.ENEMY_SPEED * dt
-                    )
-                    new_y = (
-                        enemy.y + math.sin(enemy.angle) * GameConfig.ENEMY_SPEED * dt
-                    )
-                    if not self.physics.is_wall(new_x, enemy.y):
-                        enemy.x = new_x
-                    if not self.physics.is_wall(enemy.x, new_y):
-                        enemy.y = new_y
-                else:
-                    enemy.state = "attack"
-
-                if not can_see and dist > GameConfig.LOST_PLAYER_DISTANCE:
-                    enemy.state = "patrol"
-                    self.log("Enemy lost player, returning to patrol")
-
-            elif enemy.state == "attack":
-                if dist > GameConfig.ENEMY_ATTACK_RANGE + GameConfig.COLLISION_MARGIN:
-                    enemy.state = "chase"
-                elif (
-                    enemy.attack_cooldown <= 0 and dist <= GameConfig.ENEMY_ATTACK_RANGE
-                ):
-                    enemy.attack_cooldown = GameConfig.ENEMY_ATTACK_COOLDOWN
-                    # Apply armor reduction to damage
-                    actual_damage, armor_damage = self.apply_armor_reduction(
-                        GameConfig.ENEMY_DAMAGE
-                    )
-                    player.health -= actual_damage
-                    self.log(
-                        f"Enemy attacks! Damage: {actual_damage}, Armor absorbed: {armor_damage}. Player health: {player.health}"
-                    )
-                    if player.health <= 0:
-                        self.state.game_state = "defeat"
-                        self.log("DEFEAT - Player died")
-
+            # Update attack cooldown
             if enemy.attack_cooldown > 0:
                 enemy.attack_cooldown -= dt
+
+    def _update_imp_behavior(
+        self, enemy, player, dt, dist, angle_to_player, can_see, config
+    ):
+        """Imp behavior: direct chase"""
+        patrol_speed = config.get("patrol_speed", 1.0)
+        detection_range = config.get("detection_range", 5.0)
+
+        if enemy.state == "patrol":
+            enemy.x += math.cos(enemy.patrol_dir) * patrol_speed * dt
+            enemy.y += math.sin(enemy.patrol_dir) * patrol_speed * dt
+
+            if self.physics.is_wall(
+                enemy.x + math.cos(enemy.patrol_dir) * GameConfig.COLLISION_MARGIN,
+                enemy.y + math.sin(enemy.patrol_dir) * GameConfig.COLLISION_MARGIN,
+            ):
+                enemy.patrol_dir += math.pi / 2 + random.random() * math.pi
+
+            if can_see and dist < detection_range:
+                enemy.state = "chase"
+                self.log(f"Imp spotted player at distance {dist:.2f}")
+
+        elif enemy.state == "chase":
+            speed = config.get("speed", 2.5)
+            attack_range = config.get("attack_range", 1.0)
+
+            if dist > attack_range:
+                enemy.angle = angle_to_player
+                new_x = enemy.x + math.cos(enemy.angle) * speed * dt
+                new_y = enemy.y + math.sin(enemy.angle) * speed * dt
+                if not self.physics.is_wall(new_x, enemy.y):
+                    enemy.x = new_x
+                if not self.physics.is_wall(enemy.x, new_y):
+                    enemy.y = new_y
+            else:
+                enemy.state = "attack"
+
+            if not can_see and dist > GameConfig.LOST_PLAYER_DISTANCE:
+                enemy.state = "patrol"
+                self.log("Imp lost player, returning to patrol")
+
+        elif enemy.state == "attack":
+            attack_range = config.get("attack_range", 1.0)
+            cooldown = config.get("attack_cooldown", 1.0)
+            damage = config.get("damage", 10)
+
+            if dist > attack_range + GameConfig.COLLISION_MARGIN:
+                enemy.state = "chase"
+            elif enemy.attack_cooldown <= 0 and dist <= attack_range:
+                enemy.attack_cooldown = cooldown
+                actual_damage, armor_damage = self.apply_armor_reduction(damage)
+                player.health -= actual_damage
+                self.log(
+                    f"Imp attacks! Damage: {actual_damage}, Armor absorbed: {armor_damage}. Player health: {player.health}"
+                )
+                if player.health <= 0:
+                    self.state.game_state = "defeat"
+                    self.log("DEFEAT - Player died")
+
+    def _update_demon_behavior(
+        self, enemy, player, dt, dist, angle_to_player, can_see, config
+    ):
+        """Demon behavior: flanker - moves to sides"""
+        patrol_speed = config.get("patrol_speed", 0.8)
+        detection_range = config.get("detection_range", 6.0)
+
+        if enemy.state == "patrol":
+            enemy.x += math.cos(enemy.patrol_dir) * patrol_speed * dt
+            enemy.y += math.sin(enemy.patrol_dir) * patrol_speed * dt
+
+            if self.physics.is_wall(
+                enemy.x + math.cos(enemy.patrol_dir) * GameConfig.COLLISION_MARGIN,
+                enemy.y + math.sin(enemy.patrol_dir) * GameConfig.COLLISION_MARGIN,
+            ):
+                enemy.patrol_dir += math.pi / 2 + random.random() * math.pi
+
+            if can_see and dist < detection_range:
+                enemy.state = "chase"
+                # Start at angle to flank
+                enemy.patrol_dir = angle_to_player + (
+                    math.pi / 4 if random.random() > 0.5 else -math.pi / 4
+                )
+                self.log(f"Demon spotted player, flanking at distance {dist:.2f}")
+
+        elif enemy.state == "chase":
+            speed = config.get("speed", 2.0)
+            attack_range = config.get("attack_range", 1.2)
+
+            if dist > attack_range:
+                enemy.angle = angle_to_player
+                # Flank: move at an angle to the player
+                flank_angle = angle_to_player + (
+                    math.pi / 4 if random.random() > 0.5 else -math.pi / 4
+                )
+                new_x = enemy.x + math.cos(flank_angle) * speed * dt
+                new_y = enemy.y + math.sin(flank_angle) * speed * dt
+                if not self.physics.is_wall(new_x, enemy.y):
+                    enemy.x = new_x
+                if not self.physics.is_wall(enemy.x, new_y):
+                    enemy.y = new_y
+            else:
+                enemy.state = "attack"
+
+            if not can_see and dist > GameConfig.LOST_PLAYER_DISTANCE:
+                enemy.state = "patrol"
+                self.log("Demon lost player, returning to patrol")
+
+        elif enemy.state == "attack":
+            attack_range = config.get("attack_range", 1.2)
+            cooldown = config.get("attack_cooldown", 1.5)
+            damage = config.get("damage", 15)
+
+            if dist > attack_range + GameConfig.COLLISION_MARGIN:
+                enemy.state = "chase"
+            elif enemy.attack_cooldown <= 0 and dist <= attack_range:
+                enemy.attack_cooldown = cooldown
+                actual_damage, armor_damage = self.apply_armor_reduction(damage)
+                player.health -= actual_damage
+                self.log(
+                    f"Demon attacks! Damage: {actual_damage}, Armor absorbed: {armor_damage}. Player health: {player.health}"
+                )
+                if player.health <= 0:
+                    self.state.game_state = "defeat"
+                    self.log("DEFEAT - Player died")
+
+    def _update_cacodemon_behavior(
+        self, enemy, player, dt, dist, angle_to_player, can_see, config
+    ):
+        """Cacodemon behavior: shooter - maintains distance"""
+        patrol_speed = config.get("patrol_speed", 0.5)
+        detection_range = config.get("detection_range", 8.0)
+
+        if enemy.state == "patrol":
+            enemy.x += math.cos(enemy.patrol_dir) * patrol_speed * dt
+            enemy.y += math.sin(enemy.patrol_dir) * patrol_speed * dt
+
+            if self.physics.is_wall(
+                enemy.x + math.cos(enemy.patrol_dir) * GameConfig.COLLISION_MARGIN,
+                enemy.y + math.sin(enemy.patrol_dir) * GameConfig.COLLISION_MARGIN,
+            ):
+                enemy.patrol_dir += math.pi / 2 + random.random() * math.pi
+
+            if can_see and dist < detection_range:
+                enemy.state = "chase"
+                self.log(f"Cacodemon spotted player at distance {dist:.2f}")
+
+        elif enemy.state == "chase":
+            speed = config.get("speed", 1.5)
+            attack_range = config.get("attack_range", 3.0)
+
+            # Maintain distance (2-3 units away)
+            if dist > attack_range + 1.0:
+                enemy.angle = angle_to_player
+                new_x = enemy.x + math.cos(enemy.angle) * speed * dt
+                new_y = enemy.y + math.sin(enemy.angle) * speed * dt
+                if not self.physics.is_wall(new_x, enemy.y):
+                    enemy.x = new_x
+                if not self.physics.is_wall(enemy.x, new_y):
+                    enemy.y = new_y
+            elif dist < 2.0:
+                # Back away
+                enemy.angle = angle_to_player + math.pi
+                new_x = enemy.x + math.cos(enemy.angle) * speed * 0.5 * dt
+                new_y = enemy.y + math.sin(enemy.angle) * speed * 0.5 * dt
+                if not self.physics.is_wall(new_x, enemy.y):
+                    enemy.x = new_x
+                if not self.physics.is_wall(enemy.x, new_y):
+                    enemy.y = new_y
+            else:
+                enemy.state = "attack"
+
+            if not can_see and dist > GameConfig.LOST_PLAYER_DISTANCE:
+                enemy.state = "patrol"
+                self.log("Cacodemon lost player, returning to patrol")
+
+        elif enemy.state == "attack":
+            attack_range = config.get("attack_range", 3.0)
+            cooldown = config.get("attack_cooldown", 2.0)
+            damage = config.get("damage", 20)
+
+            if dist > attack_range + GameConfig.COLLISION_MARGIN:
+                enemy.state = "chase"
+            elif enemy.attack_cooldown <= 0 and dist <= attack_range:
+                enemy.attack_cooldown = cooldown
+                actual_damage, armor_damage = self.apply_armor_reduction(damage)
+                player.health -= actual_damage
+                self.log(
+                    f"Cacodemon attacks! Damage: {actual_damage}, Armor absorbed: {armor_damage}. Player health: {player.health}"
+                )
+                if player.health <= 0:
+                    self.state.game_state = "defeat"
+                    self.log("DEFEAT - Player died")
+
+    def _update_soldier_behavior(
+        self, enemy, player, dt, dist, angle_to_player, can_see, config
+    ):
+        """Soldier behavior: uses weapon, maintains cover"""
+        patrol_speed = config.get("patrol_speed", 0.8)
+        detection_range = config.get("detection_range", 6.0)
+        attack_range = config.get("attack_range", 5.0)
+        weapon = enemy.weapon
+
+        if enemy.state == "patrol":
+            enemy.x += math.cos(enemy.patrol_dir) * patrol_speed * dt
+            enemy.y += math.sin(enemy.patrol_dir) * patrol_speed * dt
+
+            if self.physics.is_wall(
+                enemy.x + math.cos(enemy.patrol_dir) * GameConfig.COLLISION_MARGIN,
+                enemy.y + math.sin(enemy.patrol_dir) * GameConfig.COLLISION_MARGIN,
+            ):
+                enemy.patrol_dir += math.pi / 2 + random.random() * math.pi
+
+            if can_see and dist < detection_range:
+                enemy.state = "chase"
+                self.log(f"Soldier ({weapon}) spotted player at distance {dist:.2f}")
+
+        elif enemy.state == "chase":
+            speed = config.get("speed", 1.5)
+
+            # Stop at attack range
+            if dist > attack_range:
+                enemy.angle = angle_to_player
+                new_x = enemy.x + math.cos(enemy.angle) * speed * dt
+                new_y = enemy.y + math.sin(enemy.angle) * speed * dt
+                if not self.physics.is_wall(new_x, enemy.y):
+                    enemy.x = new_x
+                if not self.physics.is_wall(enemy.x, new_y):
+                    enemy.y = new_y
+            else:
+                enemy.state = "attack"
+
+            if not can_see and dist > GameConfig.LOST_PLAYER_DISTANCE:
+                enemy.state = "patrol"
+                self.log("Soldier lost player, returning to patrol")
+
+        elif enemy.state == "attack":
+            cooldown = config.get("attack_cooldown", 1.0)
+            damage = config.get("damage", 10)
+
+            if dist > attack_range + GameConfig.COLLISION_MARGIN:
+                enemy.state = "chase"
+            elif enemy.attack_cooldown <= 0 and dist <= attack_range:
+                enemy.attack_cooldown = cooldown
+                enemy.angle = angle_to_player
+
+                # Soldiers use their weapon - deal damage
+                actual_damage, armor_damage = self.apply_armor_reduction(damage)
+                player.health -= actual_damage
+                self.log(
+                    f"Soldier ({weapon}) attacks! Damage: {actual_damage}, Armor absorbed: {armor_damage}. Player health: {player.health}"
+                )
+                if player.health <= 0:
+                    self.state.game_state = "defeat"
+                    self.log("DEFEAT - Player died")
 
     def player_attack(self):
         """Player attacks using current weapon"""

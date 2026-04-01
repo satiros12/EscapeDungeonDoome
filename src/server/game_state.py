@@ -204,6 +204,47 @@ class Player:
         self.armor_type = "none"
 
 
+class EnemyType(Enum):
+    """Enemy types for WebDoom"""
+
+    IMP = "imp"
+    DEMON = "demon"
+    CACODEMON = "cacodemon"
+    SOLDIER_PISTOL = "soldier_pistol"
+    SOLDIER_SHOTGUN = "soldier_shotgun"
+    CHAINGUNNER = "chaingunner"
+
+
+class WeaponType(Enum):
+    """Weapon types for enemies"""
+
+    FISTS = "fists"
+    SWORD = "sword"
+    AXE = "axe"
+    PISTOL = "pistol"
+    SHOTGUN = "shotgun"
+    CHAINGUN = "chaingun"
+
+
+class ArmorType(Enum):
+    """Armor types for enemies"""
+
+    NONE = "none"
+    LIGHT = "light"
+    HEAVY = "heavy"
+
+
+# Enemy type mapping from map characters
+ENEMY_TYPE_MAP = {
+    "E": EnemyType.IMP,
+    "D": EnemyType.DEMON,
+    "C": EnemyType.CACODEMON,
+    "s": EnemyType.SOLDIER_PISTOL,
+    "S": EnemyType.SOLDIER_SHOTGUN,
+    "c": EnemyType.CHAINGUNNER,
+}
+
+
 @dataclass
 class Enemy:
     x: float
@@ -214,6 +255,11 @@ class Enemy:
     patrol_dir: float = 0.0
     attack_cooldown: float = 0
     dying_progress: float = 0
+    enemy_type: str = "imp"
+    weapon: str = "fists"
+    armor: int = 0
+    armor_type: str = "none"
+    last_attack_time: float = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -225,6 +271,10 @@ class Enemy:
             "patrol_dir": self.patrol_dir,
             "attack_cooldown": self.attack_cooldown,
             "dying_progress": self.dying_progress,
+            "enemy_type": self.enemy_type,
+            "weapon": self.weapon,
+            "armor": self.armor,
+            "armor_type": self.armor_type,
         }
 
 
@@ -293,17 +343,10 @@ class GameState:
                 if char == "P":
                     self.player.x = x + 0.5
                     self.player.y = y + 0.5
-                elif char == "E":
-                    self.enemies.append(
-                        Enemy(
-                            x=x + 0.5,
-                            y=y + 0.5,
-                            angle=0.0,
-                            health=GameConfig.ENEMY_MAX_HEALTH,
-                            state="patrol",
-                            patrol_dir=0.0,
-                        )
-                    )
+                elif char in ENEMY_TYPE_MAP:
+                    enemy_type = ENEMY_TYPE_MAP[char]
+                    enemy = self._create_enemy_from_type(x + 0.5, y + 0.5, enemy_type)
+                    self.enemies.append(enemy)
                 elif char == "F" and self.goal is None:
                     # Only set goal from grid if no explicit goal in map data
                     self.goal = (x + 0.5, y + 0.5)
@@ -348,6 +391,85 @@ class GameState:
     def get_map_info(self) -> Dict[str, Any]:
         """Get current map info"""
         return self.map_manager.get_current_map()
+
+    def _create_enemy_from_type(
+        self, x: float, y: float, enemy_type: EnemyType
+    ) -> Enemy:
+        """Create enemy with specific type configuration"""
+        import random
+
+        # Base configurations for each enemy type
+        enemy_configs = {
+            EnemyType.IMP: {
+                "health": 30,
+                "weapon": "fists",
+                "armor": 0,
+                "armor_type": "none",
+                "speed": 2.5,
+                "damage": 10,
+                "behavior": "chase",
+            },
+            EnemyType.DEMON: {
+                "health": 60,
+                "weapon": "fists",
+                "armor": 0,
+                "armor_type": "none",
+                "speed": 2.0,
+                "damage": 15,
+                "behavior": "flanker",
+            },
+            EnemyType.CACODEMON: {
+                "health": 100,
+                "weapon": "fists",
+                "armor": 0,
+                "armor_type": "none",
+                "speed": 1.5,
+                "damage": 20,
+                "behavior": "shooter",
+            },
+            EnemyType.SOLDIER_PISTOL: {
+                "health": 40,
+                "weapon": "pistol",
+                "armor": 0,
+                "armor_type": "none",
+                "speed": 1.5,
+                "damage": 10,
+                "behavior": "patrol",
+            },
+            EnemyType.SOLDIER_SHOTGUN: {
+                "health": 50,
+                "weapon": "shotgun",
+                "armor": 25,
+                "armor_type": "light",
+                "speed": 1.2,
+                "damage": 20,
+                "behavior": "cover",
+            },
+            EnemyType.CHAINGUNNER: {
+                "health": 60,
+                "weapon": "chaingun",
+                "armor": 25,
+                "armor_type": "light",
+                "speed": 1.0,
+                "damage": 15,
+                "behavior": "suppress",
+            },
+        }
+
+        config = enemy_configs.get(enemy_type, enemy_configs[EnemyType.IMP])
+
+        return Enemy(
+            x=x,
+            y=y,
+            angle=0.0,
+            health=config["health"],
+            state="patrol",
+            patrol_dir=random.random() * 2 * 3.14159,
+            enemy_type=enemy_type.value,
+            weapon=config["weapon"],
+            armor=config["armor"],
+            armor_type=config["armor_type"],
+        )
 
     def reset(self):
         """Reset game to initial state"""
