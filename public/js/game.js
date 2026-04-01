@@ -128,6 +128,41 @@ class Game {
                 this._sendInput();
             }, { passive: false });
         }
+        
+        // Botones tactiles de cambio de arma
+        const btnWeapon1 = document.getElementById('btn-weapon-1');
+        const btnWeapon2 = document.getElementById('btn-weapon-2');
+        const btnWeapon3 = document.getElementById('btn-weapon-3');
+        
+        if (btnWeapon1) {
+            btnWeapon1.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.state.getGameState() === 'playing' && !this.paused && !this.consoleOpen) {
+                    this._sendWeaponChange('fists');
+                }
+            }, { passive: false });
+        }
+        
+        if (btnWeapon2) {
+            btnWeapon2.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.state.getGameState() === 'playing' && !this.paused && !this.consoleOpen) {
+                    this._sendWeaponChange('sword');
+                }
+            }, { passive: false });
+        }
+        
+        if (btnWeapon3) {
+            btnWeapon3.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.state.getGameState() === 'playing' && !this.paused && !this.consoleOpen) {
+                    this._sendWeaponChange('axe');
+                }
+            }, { passive: false });
+        }
     }
     
     _requestMapsList() {
@@ -389,6 +424,13 @@ class Game {
                 else el.classList.add('hidden');
             }
         });
+        
+        // Mostrar botones de arma durante el juego
+        const weaponButtons = document.getElementById('weapon-buttons');
+        if (weaponButtons) {
+            if (show) weaponButtons.classList.remove('hidden');
+            else weaponButtons.classList.add('hidden');
+        }
     }
 
     _updateUI() {

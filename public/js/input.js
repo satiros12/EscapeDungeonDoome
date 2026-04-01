@@ -277,6 +277,68 @@ if (document.readyState === 'loading') {
     initMapSelectorTouch();
 }
 
+// Inicializar botones tactiles de cambio de arma
+function initWeaponButtons() {
+    const btnWeapon1 = document.getElementById('btn-weapon-1');
+    const btnWeapon2 = document.getElementById('btn-weapon-2');
+    const btnWeapon3 = document.getElementById('btn-weapon-3');
+    
+    if (btnWeapon1) {
+        btnWeapon1.addEventListener('click', () => {
+            if (!consoleOpen && !paused && gameState === 'playing') {
+                sendWeaponChange('fists');
+            }
+        });
+        // Soporte tactil
+        btnWeapon1.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!consoleOpen && !paused && gameState === 'playing') {
+                sendWeaponChange('fists');
+            }
+        }, { passive: false });
+    }
+    
+    if (btnWeapon2) {
+        btnWeapon2.addEventListener('click', () => {
+            if (!consoleOpen && !paused && gameState === 'playing') {
+                sendWeaponChange('sword');
+            }
+        });
+        // Soporte tactil
+        btnWeapon2.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!consoleOpen && !paused && gameState === 'playing') {
+                sendWeaponChange('sword');
+            }
+        }, { passive: false });
+    }
+    
+    if (btnWeapon3) {
+        btnWeapon3.addEventListener('click', () => {
+            if (!consoleOpen && !paused && gameState === 'playing') {
+                sendWeaponChange('axe');
+            }
+        });
+        // Soporte tactil
+        btnWeapon3.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!consoleOpen && !paused && gameState === 'playing') {
+                sendWeaponChange('axe');
+            }
+        }, { passive: false });
+    }
+}
+
+// Inicializar botones de arma al cargar
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWeaponButtons);
+} else {
+    initWeaponButtons();
+}
+
 // Teclado
 document.addEventListener('keydown', e => {
     if (e.code === 'KeyP' && e.altKey) {

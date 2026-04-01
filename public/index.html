@@ -94,10 +94,48 @@
         }
         #map-selector .arrow {
             font-size: 2rem; color: #ff0000; cursor: pointer; padding: 0 1rem; user-select: none;
+            width: 60px; height: 60px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 10px;
+            background: rgba(255, 0, 0, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            touch-action: manipulation;
+            transition: transform 0.1s, background 0.1s;
         }
         #map-selector .arrow:hover { color: #fff; transform: scale(1.2); }
+        #map-selector .arrow:active { background: rgba(255, 0, 0, 0.6); transform: scale(0.95); }
         #map-selector #map-name { font-size: 1.5rem; color: #fff; min-width: 200px; text-align: center; }
         #map-selector #map-desc { font-size: 0.9rem; color: #888; text-align: center; margin-top: 0.5rem; }
+        /* Botones de cambio de arma */
+        #weapon-buttons {
+            position: absolute;
+            bottom: 220px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
+        .weapon-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            background: rgba(255, 0, 0, 0.4);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            color: #fff;
+            font-size: 1.2rem;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .weapon-btn:hover { background: rgba(255, 0, 0, 0.7); }
+        .weapon-btn:active { background: rgba(255, 0, 0, 0.9); transform: scale(0.95); }
+        .weapon-btn.active { border-color: #0f0; background: rgba(0, 255, 0, 0.3); }
         /* Controles tactiles */
         #touch-controls {
             position: absolute;
@@ -200,6 +238,11 @@
             <div id="ammo-display">MUNICIÓN: <span id="ammo-count">∞</span></div>
         </div>
         <div id="kill-count" class="hidden">ENEMIGOS: <span id="kills">0</span>/3</div>
+        <div id="weapon-buttons" class="hidden">
+            <button id="btn-weapon-1" class="weapon-btn" title="Puños (1)">1</button>
+            <button id="btn-weapon-2" class="weapon-btn" title="Espada (2)">2</button>
+            <button id="btn-weapon-3" class="weapon-btn" title="Hacha (3)">3</button>
+        </div>
         <div id="fps-counter" class="hidden">FPS: --</div>
         <div id="connection-status" class="hidden">DESCONECTADO</div>
         <div id="crosshair" class="hidden"></div>
