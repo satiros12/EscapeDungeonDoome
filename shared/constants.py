@@ -49,7 +49,7 @@ class GameConfig:
     PATROL_SPEED: float = 1
     FOV_CULL: float = 0.2
     RAY_STEP: float = 0.02
-    COLLISION_MARGIN: float = 0.5
+    COLLISION_MARGIN: float = 0.35
     LOST_PLAYER_DISTANCE: float = 12
     DT_MAX: float = 0.1
     MIN_BRIGHTNESS: float = 0.3

@@ -92,9 +92,9 @@ class GameLogic:
         if keys.get("ArrowRight", False):
             player.angle += GameConfig.ROT_SPEED * dt
 
-        if not self.physics.is_wall(player.x + move_x, player.y):
+        if not self.physics.check_collision(player.x + move_x, player.y):
             player.x += move_x
-        if not self.physics.is_wall(player.x, player.y + move_y):
+        if not self.physics.check_collision(player.x, player.y + move_y):
             player.y += move_y
 
         if player.attack_cooldown > 0:

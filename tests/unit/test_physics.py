@@ -41,9 +41,10 @@ class TestPhysics:
         assert physics.is_wall(1, MAP_HEIGHT) is True
 
     def test_check_collision_returns_collision_status(self, physics):
-        """check_collision should return True for wall collisions"""
+        """check_collision should return True for wall collisions (with margin)"""
         assert physics.check_collision(0, 0) is True
-        assert physics.check_collision(1, 1) is False
+        # Use position far from walls (middle of floor tile) to avoid margin collision
+        assert physics.check_collision(1.5, 1.5) is False
 
     def test_has_line_of_sight_returns_true_when_clear(self, physics):
         """has_line_of_sight should return True when path is clear"""

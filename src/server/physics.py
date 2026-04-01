@@ -62,5 +62,12 @@ class Physics:
         return {"dist": GameConfig.MAX_DEPTH, "side": 0}
 
     def check_collision(self, x: float, y: float) -> bool:
-        """Check if a position collides with a wall"""
-        return self.is_wall(x, y)
+        """Check if a position collides with a wall (with margin)"""
+        margin = GameConfig.COLLISION_MARGIN
+        # Check 4 corners around the position to avoid walking through walls
+        return (
+            self.is_wall(x - margin, y - margin)
+            or self.is_wall(x + margin, y - margin)
+            or self.is_wall(x - margin, y + margin)
+            or self.is_wall(x + margin, y + margin)
+        )
