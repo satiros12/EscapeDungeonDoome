@@ -5,6 +5,7 @@ import random
 from game_state import GameState, GameConfig, Enemy, Corpse, HitEffect, Item, EnemyType
 from physics import Physics
 from weapon_system import WeaponSystem
+from pathfinding import Pathfinding
 
 
 class GameLogic:
@@ -12,6 +13,7 @@ class GameLogic:
         self.state = state
         self.physics = Physics(state)
         self.weapon_system = WeaponSystem(self.state)
+        self.pathfinding = Pathfinding(state)
         self.logger = None
 
         # Enemy type configurations
@@ -215,9 +217,11 @@ class GameLogic:
     def _update_imp_behavior(
         self, enemy, player, dt, dist, angle_to_player, can_see, config
     ):
-        """Imp behavior: direct chase"""
+        """Imp behavior: direct chase with pathfinding when line of sight lost"""
         patrol_speed = config.get("patrol_speed", 1.0)
         detection_range = config.get("detection_range", 5.0)
+        speed = config.get("speed", 2.5)
+        attack_range = config.get("attack_range", 1.0)
 
         if enemy.state == "patrol":
             enemy.x += math.cos(enemy.patrol_dir) * patrol_speed * dt
@@ -231,12 +235,12 @@ class GameLogic:
 
             if can_see and dist < detection_range:
                 enemy.state = "chase"
+                # Clear any cached path
+                if hasattr(enemy, "path"):
+                    enemy.path = None
                 self.log(f"Imp spotted player at distance {dist:.2f}")
 
         elif enemy.state == "chase":
-            speed = config.get("speed", 2.5)
-            attack_range = config.get("attack_range", 1.0)
-
             if dist > attack_range:
                 enemy.angle = angle_to_player
                 new_x = enemy.x + math.cos(enemy.angle) * speed * dt
@@ -248,9 +252,59 @@ class GameLogic:
             else:
                 enemy.state = "attack"
 
-            if not can_see and dist > GameConfig.LOST_PLAYER_DISTANCE:
+            # Lost line of sight - use pathfinding
+            if not can_see and dist > GameConfig.COLLISION_MARGIN * 2:
+                enemy.state = "searching"
+                # Find path to player
+                path = self.pathfinding.find_path(enemy.x, enemy.y, player.x, player.y)
+                if path:
+                    enemy.path = path
+                    enemy.path_index = 0
+                    self.log("Imp lost sight, using pathfinding to reach player")
+                else:
+                    enemy.state = "patrol"
+                    self.log("Imp lost player, no path found, returning to patrol")
+
+        elif enemy.state == "searching":
+            # Use pathfinding to reach player
+            if not hasattr(enemy, "path") or not enemy.path:
                 enemy.state = "patrol"
-                self.log("Imp lost player, returning to patrol")
+                return
+
+            # Get next node in path
+            path_node = self.pathfinding.get_next_path_node(
+                enemy.path, enemy.x, enemy.y
+            )
+
+            if path_node:
+                dx = path_node[0] - enemy.x
+                dy = path_node[1] - enemy.y
+                path_dist = math.sqrt(dx * dx + dy * dy)
+                path_angle = math.atan2(dy, dx)
+
+                enemy.angle = path_angle
+                new_x = enemy.x + math.cos(path_angle) * speed * dt
+                new_y = enemy.y + math.sin(path_angle) * speed * dt
+
+                if not self.physics.is_wall(new_x, enemy.y):
+                    enemy.x = new_x
+                if not self.physics.is_wall(enemy.x, new_y):
+                    enemy.y = new_y
+
+                # Check if we reached the path node
+                if path_dist < 0.3:
+                    enemy.path_index = (
+                        enemy.path_index + 1 if hasattr(enemy, "path_index") else 1
+                    )
+            else:
+                # Reached end of path, check for line of sight
+                if can_see:
+                    enemy.state = "chase"
+                    enemy.path = None
+                else:
+                    enemy.state = "patrol"
+                    enemy.path = None
+                    self.log("Imp reached path end, player not visible")
 
         elif enemy.state == "attack":
             attack_range = config.get("attack_range", 1.0)
@@ -273,9 +327,11 @@ class GameLogic:
     def _update_demon_behavior(
         self, enemy, player, dt, dist, angle_to_player, can_see, config
     ):
-        """Demon behavior: flanker - moves to sides"""
+        """Demon behavior: flanker with pathfinding when line of sight lost"""
         patrol_speed = config.get("patrol_speed", 0.8)
         detection_range = config.get("detection_range", 6.0)
+        speed = config.get("speed", 2.0)
+        attack_range = config.get("attack_range", 1.2)
 
         if enemy.state == "patrol":
             enemy.x += math.cos(enemy.patrol_dir) * patrol_speed * dt
@@ -289,6 +345,9 @@ class GameLogic:
 
             if can_see and dist < detection_range:
                 enemy.state = "chase"
+                # Clear any cached path
+                if hasattr(enemy, "path"):
+                    enemy.path = None
                 # Start at angle to flank
                 enemy.patrol_dir = angle_to_player + (
                     math.pi / 4 if random.random() > 0.5 else -math.pi / 4
@@ -296,9 +355,6 @@ class GameLogic:
                 self.log(f"Demon spotted player, flanking at distance {dist:.2f}")
 
         elif enemy.state == "chase":
-            speed = config.get("speed", 2.0)
-            attack_range = config.get("attack_range", 1.2)
-
             if dist > attack_range:
                 enemy.angle = angle_to_player
                 # Flank: move at an angle to the player
@@ -314,9 +370,54 @@ class GameLogic:
             else:
                 enemy.state = "attack"
 
-            if not can_see and dist > GameConfig.LOST_PLAYER_DISTANCE:
+            # Lost line of sight - use pathfinding
+            if not can_see and dist > GameConfig.COLLISION_MARGIN * 2:
+                enemy.state = "searching"
+                path = self.pathfinding.find_path(enemy.x, enemy.y, player.x, player.y)
+                if path:
+                    enemy.path = path
+                    enemy.path_index = 0
+                    self.log("Demon lost sight, using pathfinding to reach player")
+                else:
+                    enemy.state = "patrol"
+                    self.log("Demon lost player, no path found, returning to patrol")
+
+        elif enemy.state == "searching":
+            # Use pathfinding to reach player
+            if not hasattr(enemy, "path") or not enemy.path:
                 enemy.state = "patrol"
-                self.log("Demon lost player, returning to patrol")
+                return
+
+            path_node = self.pathfinding.get_next_path_node(
+                enemy.path, enemy.x, enemy.y
+            )
+
+            if path_node:
+                dx = path_node[0] - enemy.x
+                dy = path_node[1] - enemy.y
+                path_dist = math.sqrt(dx * dx + dy * dy)
+                path_angle = math.atan2(dy, dx)
+
+                enemy.angle = path_angle
+                new_x = enemy.x + math.cos(path_angle) * speed * dt
+                new_y = enemy.y + math.sin(path_angle) * speed * dt
+
+                if not self.physics.is_wall(new_x, enemy.y):
+                    enemy.x = new_x
+                if not self.physics.is_wall(enemy.x, new_y):
+                    enemy.y = new_y
+
+                if path_dist < 0.3:
+                    enemy.path_index = (
+                        enemy.path_index + 1 if hasattr(enemy, "path_index") else 1
+                    )
+            else:
+                if can_see:
+                    enemy.state = "chase"
+                    enemy.path = None
+                else:
+                    enemy.state = "patrol"
+                    enemy.path = None
 
         elif enemy.state == "attack":
             attack_range = config.get("attack_range", 1.2)
@@ -339,9 +440,11 @@ class GameLogic:
     def _update_cacodemon_behavior(
         self, enemy, player, dt, dist, angle_to_player, can_see, config
     ):
-        """Cacodemon behavior: shooter - maintains distance"""
+        """Cacodemon behavior: shooter with pathfinding when line of sight lost"""
         patrol_speed = config.get("patrol_speed", 0.5)
         detection_range = config.get("detection_range", 8.0)
+        speed = config.get("speed", 1.5)
+        attack_range = config.get("attack_range", 3.0)
 
         if enemy.state == "patrol":
             enemy.x += math.cos(enemy.patrol_dir) * patrol_speed * dt
@@ -355,12 +458,11 @@ class GameLogic:
 
             if can_see and dist < detection_range:
                 enemy.state = "chase"
+                if hasattr(enemy, "path"):
+                    enemy.path = None
                 self.log(f"Cacodemon spotted player at distance {dist:.2f}")
 
         elif enemy.state == "chase":
-            speed = config.get("speed", 1.5)
-            attack_range = config.get("attack_range", 3.0)
-
             # Maintain distance (2-3 units away)
             if dist > attack_range + 1.0:
                 enemy.angle = angle_to_player
@@ -382,9 +484,53 @@ class GameLogic:
             else:
                 enemy.state = "attack"
 
-            if not can_see and dist > GameConfig.LOST_PLAYER_DISTANCE:
+            # Lost line of sight - use pathfinding
+            if not can_see and dist > GameConfig.COLLISION_MARGIN * 2:
+                enemy.state = "searching"
+                path = self.pathfinding.find_path(enemy.x, enemy.y, player.x, player.y)
+                if path:
+                    enemy.path = path
+                    enemy.path_index = 0
+                    self.log("Cacodemon lost sight, using pathfinding to reach player")
+                else:
+                    enemy.state = "patrol"
+                    self.log("Cacodemon lost player, no path found")
+
+        elif enemy.state == "searching":
+            if not hasattr(enemy, "path") or not enemy.path:
                 enemy.state = "patrol"
-                self.log("Cacodemon lost player, returning to patrol")
+                return
+
+            path_node = self.pathfinding.get_next_path_node(
+                enemy.path, enemy.x, enemy.y
+            )
+
+            if path_node:
+                dx = path_node[0] - enemy.x
+                dy = path_node[1] - enemy.y
+                path_dist = math.sqrt(dx * dx + dy * dy)
+                path_angle = math.atan2(dy, dx)
+
+                enemy.angle = path_angle
+                new_x = enemy.x + math.cos(path_angle) * speed * dt
+                new_y = enemy.y + math.sin(path_angle) * speed * dt
+
+                if not self.physics.is_wall(new_x, enemy.y):
+                    enemy.x = new_x
+                if not self.physics.is_wall(enemy.x, new_y):
+                    enemy.y = new_y
+
+                if path_dist < 0.3:
+                    enemy.path_index = (
+                        enemy.path_index + 1 if hasattr(enemy, "path_index") else 1
+                    )
+            else:
+                if can_see:
+                    enemy.state = "chase"
+                    enemy.path = None
+                else:
+                    enemy.state = "patrol"
+                    enemy.path = None
 
         elif enemy.state == "attack":
             attack_range = config.get("attack_range", 3.0)
@@ -407,10 +553,11 @@ class GameLogic:
     def _update_soldier_behavior(
         self, enemy, player, dt, dist, angle_to_player, can_see, config
     ):
-        """Soldier behavior: uses weapon, maintains cover"""
+        """Soldier behavior: uses weapon, maintains cover, with pathfinding"""
         patrol_speed = config.get("patrol_speed", 0.8)
         detection_range = config.get("detection_range", 6.0)
         attack_range = config.get("attack_range", 5.0)
+        speed = config.get("speed", 1.5)
         weapon = enemy.weapon
 
         if enemy.state == "patrol":
@@ -425,11 +572,11 @@ class GameLogic:
 
             if can_see and dist < detection_range:
                 enemy.state = "chase"
+                if hasattr(enemy, "path"):
+                    enemy.path = None
                 self.log(f"Soldier ({weapon}) spotted player at distance {dist:.2f}")
 
         elif enemy.state == "chase":
-            speed = config.get("speed", 1.5)
-
             # Stop at attack range
             if dist > attack_range:
                 enemy.angle = angle_to_player
@@ -442,9 +589,53 @@ class GameLogic:
             else:
                 enemy.state = "attack"
 
-            if not can_see and dist > GameConfig.LOST_PLAYER_DISTANCE:
+            # Lost line of sight - use pathfinding
+            if not can_see and dist > GameConfig.COLLISION_MARGIN * 2:
+                enemy.state = "searching"
+                path = self.pathfinding.find_path(enemy.x, enemy.y, player.x, player.y)
+                if path:
+                    enemy.path = path
+                    enemy.path_index = 0
+                    self.log(f"Soldier ({weapon}) lost sight, using pathfinding")
+                else:
+                    enemy.state = "patrol"
+                    self.log(f"Soldier ({weapon}) lost player, no path found")
+
+        elif enemy.state == "searching":
+            if not hasattr(enemy, "path") or not enemy.path:
                 enemy.state = "patrol"
-                self.log("Soldier lost player, returning to patrol")
+                return
+
+            path_node = self.pathfinding.get_next_path_node(
+                enemy.path, enemy.x, enemy.y
+            )
+
+            if path_node:
+                dx = path_node[0] - enemy.x
+                dy = path_node[1] - enemy.y
+                path_dist = math.sqrt(dx * dx + dy * dy)
+                path_angle = math.atan2(dy, dx)
+
+                enemy.angle = path_angle
+                new_x = enemy.x + math.cos(path_angle) * speed * dt
+                new_y = enemy.y + math.sin(path_angle) * speed * dt
+
+                if not self.physics.is_wall(new_x, enemy.y):
+                    enemy.x = new_x
+                if not self.physics.is_wall(enemy.x, new_y):
+                    enemy.y = new_y
+
+                if path_dist < 0.3:
+                    enemy.path_index = (
+                        enemy.path_index + 1 if hasattr(enemy, "path_index") else 1
+                    )
+            else:
+                if can_see:
+                    enemy.state = "chase"
+                    enemy.path = None
+                else:
+                    enemy.state = "patrol"
+                    enemy.path = None
 
         elif enemy.state == "attack":
             cooldown = config.get("attack_cooldown", 1.0)
