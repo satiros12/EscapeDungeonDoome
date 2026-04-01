@@ -28,6 +28,18 @@ function connectWebSocket() {
                     return;
                 }
                 
+                if (data.type === 'weapon_changed') {
+                    // Update weapon info from server response
+                    if (data.weapon && player) {
+                        player.current_weapon = data.weapon;
+                    }
+                    if (data.ammo && player) {
+                        player.ammo = data.ammo;
+                    }
+                    updateHUD();
+                    return;
+                }
+                
                 if (data.game_state !== undefined) {
                     gameState = data.game_state;
                     player = data.player || player;

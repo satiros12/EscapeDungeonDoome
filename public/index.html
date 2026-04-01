@@ -28,6 +28,14 @@
         }
         #health-bar { width: 200px; height: 20px; background: #333; border: 2px solid #fff; }
         #health-fill { height: 100%; background: #00ff00; transition: width 0.2s; }
+        #weapon-display {
+            position: absolute; bottom: 20px; right: 20px;
+            font-family: 'Courier New', monospace; color: #fff; font-size: 1.2rem;
+        }
+        #ammo-display {
+            position: absolute; bottom: 50px; right: 20px;
+            font-family: 'Courier New', monospace; color: #fff; font-size: 1.2rem;
+        }
         #damage-flash {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(255,0,0,0.5); pointer-events: none; opacity: 0;
@@ -90,6 +98,74 @@
         #map-selector .arrow:hover { color: #fff; transform: scale(1.2); }
         #map-selector #map-name { font-size: 1.5rem; color: #fff; min-width: 200px; text-align: center; }
         #map-selector #map-desc { font-size: 0.9rem; color: #888; text-align: center; margin-top: 0.5rem; }
+        /* Controles tactiles */
+        #touch-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 200px;
+            pointer-events: auto;
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #touch-joystick {
+            width: 120px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #joystick-base {
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            position: relative;
+        }
+        #joystick-knob {
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 0, 0, 0.7);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            transition: none;
+        }
+        #touch-buttons {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .touch-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(255, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            color: #fff;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .touch-btn:active {
+            background: rgba(255, 0, 0, 0.9);
+            transform: scale(0.95);
+        }
+        .touch-btn-small {
+            width: 50px;
+            height: 50px;
+            font-size: 1.2rem;
+        }
     </style>
 </head>
 <body>
@@ -120,6 +196,8 @@
         <div id="hud" class="hidden">
             <div id="health-label">VIDA</div>
             <div id="health-bar"><div id="health-fill" style="width: 100%;"></div></div>
+            <div id="weapon-display">ARMA: <span id="weapon-name">FISTS</span></div>
+            <div id="ammo-display">MUNICIÓN: <span id="ammo-count">∞</span></div>
         </div>
         <div id="kill-count" class="hidden">ENEMIGOS: <span id="kills">0</span>/3</div>
         <div id="fps-counter" class="hidden">FPS: --</div>
@@ -136,6 +214,19 @@
             <button class="btn" id="pauseMenuBtn">MENÚ PRINCIPAL</button>
         </div>
         <div id="damage-flash"></div>
+        <div id="touch-controls" class="hidden">
+            <div id="touch-joystick">
+                <div id="joystick-base">
+                    <div id="joystick-knob"></div>
+                </div>
+            </div>
+            <div id="touch-buttons">
+                <button id="btn-attack" class="touch-btn">⚔️</button>
+                <button id="btn-pause" class="touch-btn">⏸️</button>
+                <button id="btn-rotate-left" class="touch-btn touch-btn-small">◀</button>
+                <button id="btn-rotate-right" class="touch-btn touch-btn-small">▶</button>
+            </div>
+        </div>
     </div>
     <script src="js/config.js"></script>
     <script src="js/renderer.js"></script>

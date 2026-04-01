@@ -14,37 +14,7 @@ _SHARED_DIR = os.path.join(_PROJECT_ROOT, "shared")
 _MAPS_DIR = os.path.join(_PROJECT_ROOT, "maps")
 sys.path.insert(0, _SHARED_DIR)
 
-try:
-    from constants import GameConfig
-    from config import load_config, ConfigLoader
-except ImportError:
-    pass
-
-
-class GameConfig:
-    FOV: float = math.pi / 3
-    HALF_FOV: float = math.pi / 6
-    NUM_RAYS: int = 320
-    MAX_DEPTH: float = 16
-    MOVE_SPEED: float = 3
-    ROT_SPEED: float = 2
-    ATTACK_RANGE: float = 1.5
-    ATTACK_COOLDOWN: float = 0.5
-    ENEMY_SPEED: float = 2.5
-    DETECTION_RANGE: float = 5
-    ENEMY_ATTACK_RANGE: float = 1.0
-    ENEMY_ATTACK_COOLDOWN: float = 1
-    PLAYER_MAX_HEALTH: int = 100
-    ENEMY_MAX_HEALTH: int = 30
-    PLAYER_DAMAGE: int = 10
-    ENEMY_DAMAGE: int = 10
-    PATROL_SPEED: float = 1
-    FOV_CULL: float = 0.2
-    RAY_STEP: float = 0.02
-    COLLISION_MARGIN: float = 0.5
-    LOST_PLAYER_DISTANCE: float = 12
-    DT_MAX: float = 0.1
-    MIN_BRIGHTNESS: float = 0.3
+from constants import GameConfig
 
 
 DEFAULT_MAP_DATA = [
@@ -77,71 +47,81 @@ class MapManager:
         self._current_map: str = "base"
         self._available_maps: List[str] = []
         self._load_maps()
-    
+
     def _load_maps(self):
         """Load all maps from maps directory"""
-        self._available_maps = ['base']
-        self._maps['base'] = {
-            'name': 'Base Map',
-            'grid': DEFAULT_MAP_DATA,
-            'width': 16,
-            'height': 16,
-            'description': 'Classic starting map'
+        self._available_maps = ["base"]
+        self._maps["base"] = {
+            "name": "Base Map",
+            "grid": DEFAULT_MAP_DATA,
+            "width": 16,
+            "height": 16,
+            "description": "Classic starting map",
         }
-        
+
         if not os.path.exists(_MAPS_DIR):
             return
-        
+
         for filename in os.listdir(_MAPS_DIR):
-            if filename.endswith('.json'):
+            if filename.endswith(".json"):
                 map_path = os.path.join(_MAPS_DIR, filename)
                 try:
-                    with open(map_path, 'r') as f:
+                    with open(map_path, "r") as f:
                         map_data = json.load(f)
-                        map_name = map_data.get('name', filename[:-5]).lower().replace(' ', '_')
+                        map_name = (
+                            map_data.get("name", filename[:-5])
+                            .lower()
+                            .replace(" ", "_")
+                        )
                         self._maps[map_name] = map_data
                         if map_name not in self._available_maps:
                             self._available_maps.append(map_name)
                 except Exception as e:
                     print(f"Error loading map {filename}: {e}")
-    
+
     def get_current_map(self) -> Dict:
         """Get current map data"""
-        return self._maps.get(self._current_map, self._maps.get('base', {'grid': DEFAULT_MAP_DATA}))
-    
+        return self._maps.get(
+            self._current_map, self._maps.get("base", {"grid": DEFAULT_MAP_DATA})
+        )
+
     def set_map(self, map_name: str) -> bool:
         """Set current map by name"""
-        normalized = map_name.lower().replace(' ', '_')
+        normalized = map_name.lower().replace(" ", "_")
         if normalized in self._maps:
             self._current_map = normalized
             return True
         return False
-    
+
     def get_available_maps(self) -> List[str]:
         """Get list of available map names"""
         return self._available_maps
-    
+
     def get_map_index(self) -> int:
         """Get current map index"""
-        return self._available_maps.index(self._current_map) if self._current_map in self._available_maps else 0
-    
+        return (
+            self._available_maps.index(self._current_map)
+            if self._current_map in self._available_maps
+            else 0
+        )
+
     def get_next_map(self) -> str:
         """Get next map in carousel"""
         if not self._available_maps:
-            return 'base'
+            return "base"
         idx = self.get_map_index()
         return self._available_maps[(idx + 1) % len(self._available_maps)]
-    
+
     def get_prev_map(self) -> str:
         """Get previous map in carousel"""
         if not self._available_maps:
-            return 'base'
+            return "base"
         idx = self.get_map_index()
         return self._available_maps[(idx - 1) % len(self._available_maps)]
-    
+
     def get_map_data(self, map_name: str) -> Optional[Dict]:
         """Get map data by name"""
-        normalized = map_name.lower().replace(' ', '_')
+        normalized = map_name.lower().replace(" ", "_")
         return self._maps.get(normalized)
 
 
@@ -157,6 +137,10 @@ class Player:
     attack_cooldown: float = 0
     god_mode: bool = False
     speed_multiplier: float = 1.0
+    current_weapon: str = "fists"
+    ammo: Dict[str, int] = field(
+        default_factory=lambda: {"shotgun": 50, "chaingun": 200}
+    )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -167,6 +151,8 @@ class Player:
             "attack_cooldown": self.attack_cooldown,
             "god_mode": self.god_mode,
             "speed_multiplier": self.speed_multiplier,
+            "current_weapon": self.current_weapon,
+            "ammo": self.ammo,
         }
 
     def reset(self):
@@ -175,6 +161,8 @@ class Player:
         self.angle = 0.0
         self.health = GameConfig.PLAYER_MAX_HEALTH
         self.attack_cooldown = 0
+        self.current_weapon = "fists"
+        self.ammo = {"shotgun": 50, "chaingun": 200}
 
 
 @dataclass
@@ -244,8 +232,8 @@ class GameState:
         self.hit_effects = []
 
         if map_data is None:
-            map_data = self.map_manager.get_current_map().get('grid', MAP_DATA)
-        
+            map_data = self.map_manager.get_current_map().get("grid", MAP_DATA)
+
         height = len(map_data)
         width = len(map_data[0]) if height > 0 else 0
 
@@ -298,5 +286,5 @@ class GameState:
             "kills": self.kills,
             "hit_effects": [h.to_dict() for h in self.hit_effects],
             "current_map": self.current_map,
-            "map_name": self.map_manager.get_current_map().get('name', 'Unknown'),
+            "map_name": self.map_manager.get_current_map().get("name", "Unknown"),
         }

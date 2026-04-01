@@ -313,6 +313,314 @@ async function runTests() {
         console.log('  PASS: Game restarts correctly');
         passed++;
         
+        // ============================================
+        // NEW TESTS - Damage, Kills, Victory, Maps, Resize, FPS
+        // ============================================
+        
+        console.log('\n--- Additional Tests: Damage, Kills, Victory ---');
+        
+        console.log('Test 17: Real damage to player');
+        try {
+            // Go back to menu first
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(500);
+            await page.click('#pauseMenuBtn');
+            await page.waitForTimeout(500);
+            
+            // Make sure we're not in god mode by toggling it off if active
+            await page.keyboard.down('Alt');
+            await page.keyboard.press('KeyP');
+            await page.keyboard.up('Alt');
+            await page.waitForTimeout(300);
+            await page.type('#console-input', 'god');
+            await page.keyboard.press('Enter');
+            await page.waitForTimeout(300);
+            
+            // Start fresh game without god mode
+            await page.click('#startBtn');
+            await page.waitForTimeout(2000);
+            
+            // Get initial health
+            const initialHealth = await page.$eval('#health-fill', el => {
+                const style = el.getAttribute('style') || '';
+                const match = style.match(/width:\s*(\d+)%/);
+                return match ? parseInt(match[1]) : 100;
+            });
+            console.log('  Initial health:', initialHealth + '%');
+            
+            // Wait for enemy to attack (enemies should be in the game)
+            // Give enemy time to approach and attack
+            await page.waitForTimeout(5000);
+            
+            // Check if health decreased
+            const currentHealth = await page.$eval('#health-fill', el => {
+                const style = el.getAttribute('style') || '';
+                const match = style.match(/width:\s*(\d+)%/);
+                return match ? parseInt(match[1]) : 100;
+            });
+            console.log('  Current health after waiting:', currentHealth + '%');
+            
+            if (currentHealth >= initialHealth) {
+                // Health didn't change - try moving to trigger combat
+                await page.keyboard.down('KeyW');
+                await page.waitForTimeout(1000);
+                await page.keyboard.up('KeyW');
+                await page.waitForTimeout(3000);
+                
+                const healthAfterMove = await page.$eval('#health-fill', el => {
+                    const style = el.getAttribute('style') || '';
+                    const match = style.match(/width:\s*(\d+)%/);
+                    return match ? parseInt(match[1]) : 100;
+                });
+                console.log('  Health after moving:', healthAfterMove + '%');
+                
+                if (healthAfterMove >= initialHealth) {
+                    throw new Error('Health should decrease after enemy attack, but got initial: ' + initialHealth + ', current: ' + healthAfterMove);
+                }
+            }
+            
+            console.log('  PASS: Player takes real damage from enemies');
+            passed++;
+        } catch (err) {
+            console.error('  FAIL:', err.message);
+            failed++;
+        }
+        
+        console.log('Test 18: Enemy death increases kill counter');
+        try {
+            // Enable god mode to prevent player death while killing enemies
+            await page.keyboard.down('Alt');
+            await page.keyboard.press('KeyP');
+            await page.keyboard.up('Alt');
+            await page.waitForTimeout(300);
+            await page.type('#console-input', 'god');
+            await page.keyboard.press('Enter');
+            await page.waitForTimeout(300);
+            await page.keyboard.down('Alt');
+            await page.keyboard.press('KeyP');
+            await page.keyboard.up('Alt');
+            await page.waitForTimeout(300);
+            
+            // Get initial kill count
+            const initialKills = await page.$eval('#kills', el => parseInt(el.textContent.trim()) || 0);
+            console.log('  Initial kills:', initialKills);
+            
+            // Move player to find enemies and attack multiple times
+            // Press attack key multiple times to kill enemy
+            for (let i = 0; i < 10; i++) {
+                await page.keyboard.press('Space');
+                await page.waitForTimeout(200);
+            }
+            
+            // Wait for enemy death animation
+            await page.waitForTimeout(2000);
+            
+            // Move around a bit to find another enemy
+            await page.keyboard.down('KeyW');
+            await page.waitForTimeout(500);
+            await page.keyboard.up('KeyW');
+            await page.waitForTimeout(1000);
+            
+            // Attack again
+            for (let i = 0; i < 10; i++) {
+                await page.keyboard.press('Space');
+                await page.waitForTimeout(200);
+            }
+            
+            await page.waitForTimeout(2000);
+            
+            const currentKills = await page.$eval('#kills', el => parseInt(el.textContent.trim()) || 0);
+            console.log('  Current kills:', currentKills);
+            
+            if (currentKills <= initialKills) {
+                throw new Error(`Kill count should increase after killing enemies, initial: ${initialKills}, current: ${currentKills}`);
+            }
+            
+            console.log('  PASS: Kill counter increases when enemies die');
+            passed++;
+        } catch (err) {
+            console.error('  FAIL:', err.message);
+            failed++;
+        }
+        
+        console.log('Test 19: Full victory screen appears after killing all enemies');
+        try {
+            // Continue killing enemies until victory
+            // Get current kills
+            const killsBefore = await page.$eval('#kills', el => parseInt(el.textContent.trim()) || 0);
+            console.log('  Kills before:', killsBefore);
+            
+            // Keep attacking until victory screen appears
+            let victoryAppeared = false;
+            const maxAttempts = 50;
+            
+            for (let i = 0; i < maxAttempts && !victoryAppeared; i++) {
+                await page.keyboard.press('Space');
+                await page.waitForTimeout(150);
+                
+                // Check for victory screen
+                victoryAppeared = await page.$eval('#victory', el => !el.classList.contains('hidden')).catch(() => false);
+                
+                if (!victoryAppeared) {
+                    // Move to find more enemies
+                    await page.keyboard.down('KeyW');
+                    await page.waitForTimeout(200);
+                    await page.keyboard.up('KeyW');
+                }
+            }
+            
+            await page.waitForTimeout(1000);
+            
+            const victoryVisible = await page.$eval('#victory', el => !el.classList.contains('hidden'));
+            if (!victoryVisible) {
+                throw new Error('Victory screen should appear after killing all enemies');
+            }
+            
+            console.log('  PASS: Victory screen appears after killing all enemies');
+            passed++;
+        } catch (err) {
+            console.error('  FAIL:', err.message);
+            failed++;
+        }
+        
+        console.log('Test 20: Map change and gameplay works');
+        try {
+            // Click "Continue" or go back to menu from victory
+            const continueBtn = await page.$('#continueBtn');
+            if (continueBtn) {
+                await continueBtn.click();
+                await page.waitForTimeout(1000);
+            }
+            
+            // Go to menu
+            const menuBtnFromVictory = await page.$('#menuBtn');
+            if (menuBtnFromVictory) {
+                await menuBtnFromVictory.click();
+            } else {
+                await page.keyboard.press('Escape');
+                await page.waitForTimeout(300);
+            }
+            await page.waitForTimeout(500);
+            
+            // Get current map
+            const currentMap = await page.textContent('#map-name');
+            console.log('  Current map:', currentMap);
+            
+            // Change to a different map
+            await page.evaluate(() => {
+                const btn = document.getElementById('nextMap');
+                if (btn) btn.click();
+            });
+            await page.waitForTimeout(1000);
+            
+            const newMap = await page.textContent('#map-name');
+            console.log('  Changed to map:', newMap);
+            
+            if (newMap === currentMap) {
+                throw new Error('Map should have changed');
+            }
+            
+            // Start game on new map
+            await page.click('#startBtn');
+            await page.waitForTimeout(2000);
+            
+            // Verify game runs on new map
+            const hudVisible = await page.$eval('#hud', el => !el.classList.contains('hidden'));
+            if (!hudVisible) {
+                throw new Error('HUD should be visible on new map');
+            }
+            
+            // Test basic movement works on new map
+            await page.keyboard.down('KeyW');
+            await page.waitForTimeout(200);
+            await page.keyboard.up('KeyW');
+            
+            console.log('  PASS: Game runs correctly on different map');
+            passed++;
+        } catch (err) {
+            console.error('  FAIL:', err.message);
+            failed++;
+        }
+        
+        console.log('Test 21: Window resize adjusts canvas correctly');
+        try {
+            // Get initial canvas size
+            const canvas = await page.$('canvas#game');
+            const initialBox = await canvas.boundingBox();
+            console.log('  Initial canvas size:', initialBox.width + 'x' + initialBox.height);
+            
+            // Resize window to a smaller size
+            await page.setViewportSize({ width: 800, height: 600 });
+            await page.waitForTimeout(500);
+            
+            const smallBox = await canvas.boundingBox();
+            console.log('  Canvas size after resize (800x600):', smallBox.width + 'x' + smallBox.height);
+            
+            if (smallBox.width > initialBox.width || smallBox.height > initialBox.height) {
+                throw new Error('Canvas should have shrunk after viewport resize');
+            }
+            
+            // Resize to larger size
+            await page.setViewportSize({ width: 1400, height: 900 });
+            await page.waitForTimeout(500);
+            
+            const largeBox = await canvas.boundingBox();
+            console.log('  Canvas size after resize (1400x900):', largeBox.width + 'x' + largeBox.height);
+            
+            // Verify canvas adjusted
+            if (largeBox.width < smallBox.width || largeBox.height < smallBox.height) {
+                throw new Error('Canvas should have grown after viewport resize');
+            }
+            
+            // Reset to default size
+            await page.setViewportSize({ width: 1024, height: 768 });
+            await page.waitForTimeout(300);
+            
+            console.log('  PASS: Canvas adjusts correctly on window resize');
+            passed++;
+        } catch (err) {
+            console.error('  FAIL:', err.message);
+            failed++;
+        }
+        
+        console.log('Test 22: FPS performance test');
+        try {
+            // Get FPS counter value
+            const fpsText = await page.textContent('#fps-counter');
+            console.log('  FPS text:', fpsText);
+            
+            // Extract FPS number from text (format: "FPS: XX")
+            const fpsMatch = fpsText.match(/FPS:\s*(\d+)/);
+            if (!fpsMatch) {
+                throw new Error('Could not parse FPS value from: ' + fpsText);
+            }
+            
+            const fps = parseInt(fpsMatch[1]);
+            console.log('  Current FPS:', fps);
+            
+            if (fps < 30) {
+                throw new Error(`FPS should be above 30, but got ${fps}`);
+            }
+            
+            // Run for a few seconds and check again
+            await page.waitForTimeout(3000);
+            
+            const fpsText2 = await page.textContent('#fps-counter');
+            const fpsMatch2 = fpsText2.match(/FPS:\s*(\d+)/);
+            const fps2 = parseInt(fpsMatch2[1]);
+            console.log('  FPS after 3 seconds:', fps2);
+            
+            if (fps2 < 30) {
+                throw new Error(`FPS should remain above 30, but got ${fps2}`);
+            }
+            
+            console.log('  PASS: FPS is above 30 during gameplay');
+            passed++;
+        } catch (err) {
+            console.error('  FAIL:', err.message);
+            failed++;
+        }
+        
         if (errors.length > 0) {
             console.log('\nConsole errors detected:');
             errors.forEach(e => console.log('  - ' + e));

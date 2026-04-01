@@ -36,7 +36,98 @@ class Game {
         document.getElementById('prevMap')?.addEventListener('click', () => this._selectPrevMap());
         document.getElementById('nextMap')?.addEventListener('click', () => this._selectNextMap());
         
+        // Controles tactiles - asegurar que no propagan eventos
+        this._setupTouchControls();
+        
         this._requestMapsList();
+    }
+    
+    _setupTouchControls() {
+        const touchControls = document.getElementById('touch-controls');
+        if (touchControls) {
+            touchControls.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+            touchControls.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
+            touchControls.addEventListener('touchend', (e) => e.stopPropagation(), { passive: true });
+        }
+        
+        const joystick = document.getElementById('touch-joystick');
+        if (joystick) {
+            joystick.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+            joystick.addEventListener('touchmove', (e) => e.stopPropagation(), { passive: true });
+            joystick.addEventListener('touchend', (e) => e.stopPropagation(), { passive: true });
+        }
+        
+        const buttons = document.getElementById('touch-buttons');
+        if (buttons) {
+            buttons.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+            buttons.addEventListener('touchend', (e) => e.stopPropagation(), { passive: true });
+        }
+        
+        // Botones tactiles - conectar con metodos del juego
+        const btnAttack = document.getElementById('btn-attack');
+        const btnPause = document.getElementById('btn-pause');
+        const btnRotateLeft = document.getElementById('btn-rotate-left');
+        const btnRotateRight = document.getElementById('btn-rotate-right');
+        
+        if (btnAttack) {
+            btnAttack.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.state.getGameState() === 'playing' && !this.paused && !this.consoleOpen) {
+                    this.keys['Space'] = true;
+                    this._sendInput();
+                    this._sendAttack();
+                    setTimeout(() => {
+                        this.keys['Space'] = false;
+                        this._sendInput();
+                    }, 100);
+                }
+            }, { passive: false });
+        }
+        
+        if (btnPause) {
+            btnPause.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.state.getGameState() === 'playing' && !this.paused && !this.consoleOpen) {
+                    this.pause();
+                }
+            }, { passive: false });
+        }
+        
+        if (btnRotateLeft) {
+            btnRotateLeft.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.state.getGameState() === 'playing' && !this.paused && !this.consoleOpen) {
+                    this.keys['ArrowLeft'] = true;
+                    this._sendInput();
+                }
+            }, { passive: false });
+            btnRotateLeft.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.keys['ArrowLeft'] = false;
+                this._sendInput();
+            }, { passive: false });
+        }
+        
+        if (btnRotateRight) {
+            btnRotateRight.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.state.getGameState() === 'playing' && !this.paused && !this.consoleOpen) {
+                    this.keys['ArrowRight'] = true;
+                    this._sendInput();
+                }
+            }, { passive: false });
+            btnRotateRight.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.keys['ArrowRight'] = false;
+                this._sendInput();
+            }, { passive: false });
+        }
     }
     
     _requestMapsList() {
@@ -99,6 +190,18 @@ class Game {
         }
 
         if (this.paused || this.state.getGameState() !== 'playing') return;
+
+        // Weapon change with keys 1-4
+        if (['Digit1', 'Digit2', 'Digit3', 'Digit4'].includes(e.code)) {
+            const weaponMap = {
+                'Digit1': 'fists',
+                'Digit2': 'chainsaw',
+                'Digit3': 'shotgun',
+                'Digit4': 'chaingun'
+            };
+            this._sendWeaponChange(weaponMap[e.code]);
+            return;
+        }
 
         this.keys[e.code] = true;
         this._sendInput();
@@ -204,6 +307,10 @@ class Game {
 
     _sendAttack() {
         this._send({ type: 'attack' });
+    }
+
+    _sendWeaponChange(weapon) {
+        this._send({ type: 'change_weapon', weapon: weapon });
     }
 
     start() {

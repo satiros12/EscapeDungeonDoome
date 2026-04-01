@@ -4,12 +4,14 @@ import math
 import random
 from game_state import GameState, GameConfig, Enemy, Corpse, HitEffect
 from physics import Physics
+from weapon_system import WeaponSystem
 
 
 class GameLogic:
     def __init__(self, state: GameState):
         self.state = state
         self.physics = Physics(state)
+        self.weapon_system = WeaponSystem(state)
         self.logger = None
 
     def set_logger(self, logger):
@@ -168,30 +170,16 @@ class GameLogic:
                 enemy.attack_cooldown -= dt
 
     def player_attack(self):
-        """Player attacks nearby enemies"""
-        if self.state.player.attack_cooldown > 0:
-            return
+        """Player attacks using current weapon"""
+        result = self.weapon_system.player_attack()
 
-        self.state.player.attack_cooldown = GameConfig.ATTACK_COOLDOWN
-        player = self.state.player
-
-        for enemy in self.state.enemies:
-            if enemy.state in ("dying", "dead"):
-                continue
-
-            dx = enemy.x - player.x
-            dy = enemy.y - player.y
-            dist = math.sqrt(dx * dx + dy * dy)
-
-            if dist < GameConfig.ATTACK_RANGE:
-                enemy.health -= GameConfig.PLAYER_DAMAGE
-                self.state.hit_effects.append(HitEffect(x=enemy.x, y=enemy.y))
-                self.log(f"Player hits enemy! Enemy health: {enemy.health}")
-
-                if enemy.health <= 0:
-                    enemy.state = "dying"
-                    enemy.dying_progress = 0
-                    self.log("Enemy entering dying state")
+        if result.get("success"):
+            # Add hit effects for each hit
+            for hit in result.get("hits", []):
+                self.state.hit_effects.append(HitEffect(x=hit["x"], y=hit["y"]))
+                self.log(
+                    f"Player hits enemy with {result['weapon']}! Damage: {hit['damage']}"
+                )
 
     def update_dying_enemies(self, dt: float):
         """Update dying enemies"""

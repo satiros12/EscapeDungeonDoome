@@ -27,6 +27,23 @@ function updateHUD() {
     const fill = document.getElementById('health-fill');
     fill.style.width = Math.max(0, player.health) + '%';
     fill.style.background = player.health > 50 ? '#00ff00' : player.health > 25 ? '#ffff00' : '#ff0000';
+    
+    // Update weapon display
+    const weaponNameEl = document.getElementById('weapon-name');
+    const ammoCountEl = document.getElementById('ammo-count');
+    if (weaponNameEl && player.current_weapon) {
+        weaponNameEl.textContent = player.current_weapon.toUpperCase();
+    }
+    if (ammoCountEl && player.ammo) {
+        const weapon = player.current_weapon || 'fists';
+        if (weapon === 'shotgun') {
+            ammoCountEl.textContent = player.ammo.shotgun !== undefined ? player.ammo.shotgun : 0;
+        } else if (weapon === 'chaingun') {
+            ammoCountEl.textContent = player.ammo.chaingun !== undefined ? player.ammo.chaingun : 0;
+        } else {
+            ammoCountEl.textContent = '∞';
+        }
+    }
 }
 
 function updateUI() {

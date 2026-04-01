@@ -26,27 +26,30 @@ MAP_WIDTH = len(MAP_DATA[0])
 MAP_HEIGHT = len(MAP_DATA)
 
 
+import math
+
+
 class GameConfig:
-    FOV = 3.141592653589793 / 3
-    HALF_FOV = 3.141592653589793 / 6
-    NUM_RAYS = 320
-    MAX_DEPTH = 16
-    MOVE_SPEED = 3
-    ROT_SPEED = 2
-    ATTACK_RANGE = 1.5
-    ATTACK_COOLDOWN = 0.5
-    ENEMY_SPEED = 2.5
-    DETECTION_RANGE = 5
-    ENEMY_ATTACK_RANGE = 1.0
-    ENEMY_ATTACK_COOLDOWN = 1
-    PLAYER_MAX_HEALTH = 100
-    ENEMY_MAX_HEALTH = 30
-    PLAYER_DAMAGE = 10
-    ENEMY_DAMAGE = 10
-    PATROL_SPEED = 1
-    FOV_CULL = 0.2
-    RAY_STEP = 0.02
-    COLLISION_MARGIN = 0.5
-    LOST_PLAYER_DISTANCE = 12
-    DT_MAX = 0.1
-    MIN_BRIGHTNESS = 0.3
+    FOV: float = math.pi / 3
+    HALF_FOV: float = math.pi / 6
+    NUM_RAYS: int = 320
+    MAX_DEPTH: float = 16
+    MOVE_SPEED: float = 3
+    ROT_SPEED: float = 2
+    ATTACK_RANGE: float = 1.5
+    ATTACK_COOLDOWN: float = 0.5
+    ENEMY_SPEED: float = 2.5
+    DETECTION_RANGE: float = 5
+    ENEMY_ATTACK_RANGE: float = 1.0
+    ENEMY_ATTACK_COOLDOWN: float = 1
+    PLAYER_MAX_HEALTH: int = 100
+    ENEMY_MAX_HEALTH: int = 30
+    PLAYER_DAMAGE: int = 10
+    ENEMY_DAMAGE: int = 10
+    PATROL_SPEED: float = 1
+    FOV_CULL: float = 0.2
+    RAY_STEP: float = 0.02
+    COLLISION_MARGIN: float = 0.5
+    LOST_PLAYER_DISTANCE: float = 12
+    DT_MAX: float = 0.1
+    MIN_BRIGHTNESS: float = 0.3
