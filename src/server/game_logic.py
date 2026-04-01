@@ -2,7 +2,7 @@
 
 import math
 import random
-from game_state import GameState, GameConfig, Enemy, Corpse, HitEffect
+from game_state import GameState, GameConfig, Enemy, Corpse, HitEffect, Item
 from physics import Physics
 from weapon_system import WeaponSystem
 
@@ -11,7 +11,7 @@ class GameLogic:
     def __init__(self, state: GameState):
         self.state = state
         self.physics = Physics(state)
-        self.weapon_system = WeaponSystem(state)
+        self.weapon_system = WeaponSystem(self.state)
         self.logger = None
 
     def set_logger(self, logger):
@@ -37,6 +37,7 @@ class GameLogic:
             return
 
         self.move_player(dt, self.state.pending_input)
+        self.collect_items()
         self.update_enemies(dt)
         self.update_dying_enemies(dt)
         self.update_hit_effects(dt)
@@ -160,8 +161,14 @@ class GameLogic:
                     enemy.attack_cooldown <= 0 and dist <= GameConfig.ENEMY_ATTACK_RANGE
                 ):
                     enemy.attack_cooldown = GameConfig.ENEMY_ATTACK_COOLDOWN
-                    player.health -= GameConfig.ENEMY_DAMAGE
-                    self.log(f"Enemy attacks! Player health: {player.health}")
+                    # Apply armor reduction to damage
+                    actual_damage, armor_damage = self.apply_armor_reduction(
+                        GameConfig.ENEMY_DAMAGE
+                    )
+                    player.health -= actual_damage
+                    self.log(
+                        f"Enemy attacks! Damage: {actual_damage}, Armor absorbed: {armor_damage}. Player health: {player.health}"
+                    )
                     if player.health <= 0:
                         self.state.game_state = "defeat"
                         self.log("DEFEAT - Player died")
@@ -201,7 +208,88 @@ class GameLogic:
 
     def check_conditions(self):
         """Check win/lose conditions"""
+        # Check goal reached
+        if self.state.goal and not self.state.goal_reached:
+            player = self.state.player
+            goal_x, goal_y = self.state.goal
+            dist = math.sqrt((player.x - goal_x) ** 2 + (player.y - goal_y) ** 2)
+            if dist < 1.0:
+                self.state.goal_reached = True
+                self.state.game_state = "victory"
+                self.log("VICTORY - Goal reached!")
+                return
+
+        # Check all enemies defeated (original condition)
         alive_enemies = [e for e in self.state.enemies if e.state != "dead"]
         if len(alive_enemies) == 0 and self.state.game_state == "playing":
             self.state.game_state = "victory"
             self.log("VICTORY - All enemies eliminated")
+
+    def collect_items(self):
+        """Check and collect items near player"""
+        player = self.state.player
+
+        for item in self.state.items:
+            if item.collected:
+                continue
+
+            dist = math.sqrt((player.x - item.x) ** 2 + (player.y - item.y) ** 2)
+            if dist < 1.0:
+                self._collect_item(item)
+
+    def _collect_item(self, item: Item):
+        """Collect a specific item"""
+        player = self.state.player
+
+        if item.item_type == "health_pack":
+            heal_amount = item.value if item.value > 0 else 25
+            player.health = min(
+                GameConfig.PLAYER_MAX_HEALTH, player.health + heal_amount
+            )
+            self.log(f"Collected health pack! Health: {player.health}")
+
+        elif item.item_type == "ammo_shotgun":
+            ammo_amount = item.value if item.value > 0 else 10
+            player.ammo["shotgun"] = player.ammo.get("shotgun", 0) + ammo_amount
+            self.log(f"Collected shotgun ammo! Shotgun: {player.ammo['shotgun']}")
+
+        elif item.item_type == "ammo_chaingun":
+            ammo_amount = item.value if item.value > 0 else 50
+            player.ammo["chaingun"] = player.ammo.get("chaingun", 0) + ammo_amount
+            self.log(f"Collected chaingun ammo! Chaingun: {player.ammo['chaingun']}")
+
+        elif item.item_type == "armor_light":
+            armor_amount = item.value if item.value > 0 else 25
+            player.armor = min(100, player.armor + armor_amount)
+            player.armor_type = "light"
+            self.log(f"Collected light armor! Armor: {player.armor}")
+
+        elif item.item_type == "armor_heavy":
+            armor_amount = item.value if item.value > 0 else 50
+            player.armor = min(100, player.armor + armor_amount)
+            player.armor_type = "heavy"
+            self.log(f"Collected heavy armor! Armor: {player.armor}")
+
+        elif item.item_type in ("weapon_fists", "weapon_sword", "weapon_axe"):
+            self.log(f"Collected weapon: {item.item_type}")
+
+        item.collected = True
+
+    def apply_armor_reduction(self, damage: int) -> tuple:
+        """Apply armor damage reduction. Returns (actual_damage, armor_damage)"""
+        player = self.state.player
+
+        if player.armor <= 0:
+            return damage, 0
+
+        armor_protection = 0.5 if player.armor_type == "light" else 0.75
+
+        actual_damage = int(damage * (1 - armor_protection))
+        armor_damage = int(damage * armor_protection)
+
+        player.armor = max(0, player.armor - armor_damage)
+
+        if player.armor <= 0:
+            player.armor_type = "none"
+
+        return actual_damage, armor_damage

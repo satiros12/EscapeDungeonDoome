@@ -5,6 +5,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
+from enum import Enum
 
 import json
 
@@ -15,6 +16,35 @@ _MAPS_DIR = os.path.join(_PROJECT_ROOT, "maps")
 sys.path.insert(0, _SHARED_DIR)
 
 from constants import GameConfig
+
+
+class ItemType(Enum):
+    HEALTH_PACK = "health_pack"
+    AMMO_SHOTGUN = "ammo_shotgun"
+    AMMO_CHAINGUN = "ammo_chaingun"
+    WEAPON_FISTS = "weapon_fists"
+    WEAPON_SWORD = "weapon_sword"
+    WEAPON_AXE = "weapon_axe"
+    ARMOR_LIGHT = "armor_light"
+    ARMOR_HEAVY = "armor_heavy"
+
+
+@dataclass
+class Item:
+    x: float
+    y: float
+    item_type: str
+    value: int = 0
+    collected: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "x": self.x,
+            "y": self.y,
+            "item_type": self.item_type,
+            "value": self.value,
+            "collected": self.collected,
+        }
 
 
 DEFAULT_MAP_DATA = [
@@ -73,6 +103,11 @@ class MapManager:
                             .lower()
                             .replace(" ", "_")
                         )
+                        # Add default values for new fields
+                        if "goal" not in map_data:
+                            map_data["goal"] = None
+                        if "items" not in map_data:
+                            map_data["items"] = []
                         self._maps[map_name] = map_data
                         if map_name not in self._available_maps:
                             self._available_maps.append(map_name)
@@ -141,6 +176,8 @@ class Player:
     ammo: Dict[str, int] = field(
         default_factory=lambda: {"shotgun": 50, "chaingun": 200}
     )
+    armor: int = 0
+    armor_type: str = "none"  # "none", "light", "heavy"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -153,6 +190,8 @@ class Player:
             "speed_multiplier": self.speed_multiplier,
             "current_weapon": self.current_weapon,
             "ammo": self.ammo,
+            "armor": self.armor,
+            "armor_type": self.armor_type,
         }
 
     def reset(self):
@@ -163,6 +202,8 @@ class Player:
         self.attack_cooldown = 0
         self.current_weapon = "fists"
         self.ammo = {"shotgun": 50, "chaingun": 200}
+        self.armor = 0
+        self.armor_type = "none"
 
 
 @dataclass
@@ -219,6 +260,9 @@ class GameState:
     pending_input: Dict[str, bool] = field(default_factory=dict)
     player_speed_multiplier: float = 1.0
     current_map: str = "base"
+    goal: Optional[tuple] = None  # (x, y) position
+    goal_reached: bool = False
+    items: List[Item] = field(default_factory=list)
 
     def __post_init__(self):
         self.map_manager = MapManager()
@@ -230,9 +274,15 @@ class GameState:
         self.corpses = []
         self.kills = 0
         self.hit_effects = []
+        self.goal = None
+        self.goal_reached = False
+        self.items = []
+
+        # Get map info from map manager for items and goal
+        map_info = self.map_manager.get_current_map()
 
         if map_data is None:
-            map_data = self.map_manager.get_current_map().get("grid", MAP_DATA)
+            map_data = map_info.get("grid", MAP_DATA)
 
         height = len(map_data)
         width = len(map_data[0]) if height > 0 else 0
@@ -256,6 +306,35 @@ class GameState:
                             patrol_dir=0.0,
                         )
                     )
+                elif char == "F" and self.goal is None:
+                    # Only set goal from grid if no explicit goal in map data
+                    self.goal = (x + 0.5, y + 0.5)
+
+        # Load items from map data
+        self.load_items_from_map(map_info)
+
+        # Override goal from explicit map data if present
+        explicit_goal = map_info.get("goal")
+        if (
+            explicit_goal
+            and isinstance(explicit_goal, (list, tuple))
+            and len(explicit_goal) >= 2
+        ):
+            self.goal = (explicit_goal[0] + 0.5, explicit_goal[1] + 0.5)
+
+    def load_items_from_map(self, map_info: Dict):
+        """Load items from map info"""
+        items_data = map_info.get("items", [])
+        for item_data in items_data:
+            self.items.append(
+                Item(
+                    x=item_data.get("x", 0),
+                    y=item_data.get("y", 0),
+                    item_type=item_data.get("type", "health_pack"),
+                    value=item_data.get("value", 0),
+                    collected=False,
+                )
+            )
 
     def set_map(self, map_name: str) -> bool:
         """Set the current map"""
@@ -287,4 +366,7 @@ class GameState:
             "hit_effects": [h.to_dict() for h in self.hit_effects],
             "current_map": self.current_map,
             "map_name": self.map_manager.get_current_map().get("name", "Unknown"),
+            "goal": self.goal,
+            "goal_reached": self.goal_reached,
+            "items": [i.to_dict() for i in self.items],
         }
