@@ -248,6 +248,35 @@ if (isTouchDevice) {
     }
 }
 
+// Event listeners tactiles para cambiar de mapa en el menu
+function initMapSelectorTouch() {
+    const prevMapBtn = document.getElementById('prevMap');
+    const nextMapBtn = document.getElementById('nextMap');
+    
+    if (prevMapBtn) {
+        prevMapBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            selectPrevMap();
+        }, { passive: false });
+    }
+    
+    if (nextMapBtn) {
+        nextMapBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            selectNextMap();
+        }, { passive: false });
+    }
+}
+
+// Inicializar tactil del selector de mapas
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMapSelectorTouch);
+} else {
+    initMapSelectorTouch();
+}
+
 // Teclado
 document.addEventListener('keydown', e => {
     if (e.code === 'KeyP' && e.altKey) {
