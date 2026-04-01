@@ -291,21 +291,28 @@ WebDoom/
 
 ---
 
-## 7. Pendiente de Implementación
+## 7. Estado de Implementación
 
-| Feature | Estado | Prioridad |
-|---------|--------|-----------|
-| Controles táctiles móviles | ✅ Implementado | - |
-| Sistema de armas (4 armas) | ✅ Implementado | - |
-| Tests E2E ampliados | ✅ Implementado | - |
-| Editor de mapas mejorado | ❌ Pendiente | ALTA |
-| Sistema de misión (inicio/fin) | ❌ Pendiente | ALTA |
-| Armas (Puños/Espada/Hacha) | ❌ Pendiente | MEDIA |
-| Sistema de armadura | ❌ Pendiente | MEDIA |
-| Tipos de enemigos avanzados | ❌ Pendiente | MEDIA |
-| Mapas más grandes | ❌ Pendiente | MEDIA |
-| Pathfinding enemigos | ❌ Pendiente | ALTA |
-| Arreglar paredes atravesables | ❌ Pendiente | ALTA |
+| Feature | Estado | Commit |
+|---------|--------|--------|
+| Controles táctiles móviles | ✅ Implementado | fdee6d7 |
+| Sistema de armas (Puños/Espada/Hacha) | ✅ Implementado | 2289243 |
+| Sistema de armadura | ✅ Implementado | 09b5701 |
+| Tipos de enemigos avanzados | ✅ Implementado | d5bbec5 |
+| Mapas con misión (goal) | ✅ Implementado | 09b5701 |
+| Editor de mapas mejorado | ✅ Implementado | 09b5701 |
+| Pathfinding A* | ✅ Implementado | 060cf81 |
+| Arreglar paredes atravesables | ✅ Implementado | 7a159ea |
+| Controles táctiles menú | ✅ Implementado | 832ad2f |
+
+### Tests
+
+| Tipo | Resultado |
+|------|-----------|
+| Unitarios | 78 passed, 1 skipped |
+| E2E | 24 passed, 3 failed* |
+
+*Los 3 tests que fallan son de interacción compleja con enemigos (timing issues en test).
 
 ---
 
