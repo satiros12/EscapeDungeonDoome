@@ -1,20 +1,30 @@
 """Physics engine for WebDoom server"""
 
 import math
-from game_state import GameState, GameConfig, MAP_DATA, MAP_WIDTH, MAP_HEIGHT
+from game_state import GameState, GameConfig
 
 
 class Physics:
     def __init__(self, state: GameState):
         self.state = state
 
+    def _get_current_grid(self):
+        """Get current map grid from state"""
+        map_info = self.state.map_manager.get_current_map()
+        return map_info.get("grid", [])
+
     def is_wall(self, x: float, y: float) -> bool:
         """Check if a position is a wall"""
+        grid = self._get_current_grid()
+        if not grid:
+            return True
         mx = int(x)
         my = int(y)
-        if mx < 0 or mx >= MAP_WIDTH or my < 0 or my >= MAP_HEIGHT:
+        width = len(grid[0]) if grid else 0
+        height = len(grid) if grid else 0
+        if mx < 0 or mx >= width or my < 0 or my >= height:
             return True
-        return MAP_DATA[my][mx] == "#"
+        return grid[my][mx] == "#"
 
     def has_line_of_sight(self, x1: float, y1: float, x2: float, y2: float) -> bool:
         """Check if there's a clear line of sight between two points"""

@@ -12,19 +12,24 @@ if _SERVER_DIR not in sys.path:
 
 from game_state import GameState
 
-# Import map data from constants
-_SHARED_DIR = os.path.join(os.path.dirname(_SERVER_DIR), "..", "shared")
-if _SHARED_DIR not in sys.path:
-    sys.path.insert(0, _SHARED_DIR)
-
-from constants import MAP_DATA, MAP_WIDTH, MAP_HEIGHT
-
 
 class Pathfinding:
     """A* pathfinding for enemies to navigate around obstacles"""
 
     def __init__(self, state: GameState):
         self.state = state
+
+    def _get_current_grid(self):
+        """Get current map grid from state"""
+        map_info = self.state.map_manager.get_current_map()
+        return map_info.get("grid", [])
+
+    def _get_grid_size(self):
+        """Get current map grid dimensions"""
+        grid = self._get_current_grid()
+        if not grid:
+            return (0, 0)
+        return (len(grid[0]) if grid else 0, len(grid) if grid else 0)
 
     def find_path(
         self, start_x: float, start_y: float, end_x: float, end_y: float
@@ -34,8 +39,10 @@ class Pathfinding:
         start = (int(start_x), int(start_y))
         end = (int(end_x), int(end_y))
 
+        width, height = self._get_grid_size()
+
         # Handle edge cases
-        if not self._is_valid_grid(end):
+        if not self._is_valid_grid(end, width, height):
             return None
 
         if start == end:
@@ -60,7 +67,7 @@ class Pathfinding:
             if current == end:
                 return self._reconstruct_path(came_from, current, end_x, end_y)
 
-            for neighbor in self._get_neighbors(current):
+            for neighbor in self._get_neighbors(current, width, height):
                 if not self._is_walkable(neighbor):
                     continue
 
@@ -78,17 +85,25 @@ class Pathfinding:
         """Manhattan distance heuristic for A*"""
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-    def _get_neighbors(self, node: Tuple[int, int]) -> List[Tuple[int, int]]:
+    def _get_neighbors(
+        self, node: Tuple[int, int], width: int = None, height: int = None
+    ) -> List[Tuple[int, int]]:
         """Get walkable neighbors (4-directional movement)"""
+        if width is None or height is None:
+            width, height = self._get_grid_size()
         x, y = node
         neighbors = [(x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)]
         # Filter valid grid positions
-        return [n for n in neighbors if self._is_valid_grid(n)]
+        return [n for n in neighbors if self._is_valid_grid(n, width, height)]
 
-    def _is_valid_grid(self, node: Tuple[int, int]) -> bool:
+    def _is_valid_grid(
+        self, node: Tuple[int, int], width: int = None, height: int = None
+    ) -> bool:
         """Check if node is within map bounds"""
+        if width is None or height is None:
+            width, height = self._get_grid_size()
         x, y = node
-        return 0 <= x < MAP_WIDTH and 0 <= y < MAP_HEIGHT
+        return 0 <= x < width and 0 <= y < height
 
     def _is_walkable(self, node: Tuple[int, int]) -> bool:
         """Check if node is walkable (not a wall)"""
@@ -100,11 +115,16 @@ class Pathfinding:
 
     def _is_wall(self, x: float, y: float) -> bool:
         """Check if a position is a wall"""
+        grid = self._get_current_grid()
+        if not grid:
+            return True
         mx = int(x)
         my = int(y)
-        if mx < 0 or mx >= MAP_WIDTH or my < 0 or my >= MAP_HEIGHT:
+        width = len(grid[0]) if grid else 0
+        height = len(grid) if grid else 0
+        if mx < 0 or mx >= width or my < 0 or my >= height:
             return True
-        return MAP_DATA[my][mx] == "#"
+        return grid[my][mx] == "#"
 
     def _reconstruct_path(
         self, came_from: dict, current: Tuple[int, int], end_x: float, end_y: float

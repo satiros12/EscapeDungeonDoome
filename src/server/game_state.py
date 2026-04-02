@@ -80,39 +80,43 @@ class MapManager:
 
     def _load_maps(self):
         """Load all maps from maps directory"""
-        self._available_maps = ["base"]
-        self._maps["base"] = {
-            "name": "Base Map",
-            "grid": DEFAULT_MAP_DATA,
-            "width": 16,
-            "height": 16,
-            "description": "Classic starting map",
-        }
-
-        if not os.path.exists(_MAPS_DIR):
-            return
-
-        for filename in os.listdir(_MAPS_DIR):
-            if filename.endswith(".json"):
-                map_path = os.path.join(_MAPS_DIR, filename)
-                try:
-                    with open(map_path, "r") as f:
-                        map_data = json.load(f)
-                        map_name = (
-                            map_data.get("name", filename[:-5])
-                            .lower()
-                            .replace(" ", "_")
-                        )
-                        # Add default values for new fields
-                        if "goal" not in map_data:
-                            map_data["goal"] = None
-                        if "items" not in map_data:
-                            map_data["items"] = []
-                        self._maps[map_name] = map_data
-                        if map_name not in self._available_maps:
+        # First, try to load maps from the maps directory
+        if os.path.exists(_MAPS_DIR):
+            for filename in os.listdir(_MAPS_DIR):
+                if filename.endswith(".json"):
+                    map_path = os.path.join(_MAPS_DIR, filename)
+                    try:
+                        with open(map_path, "r") as f:
+                            map_data = json.load(f)
+                            map_name = (
+                                map_data.get("name", filename[:-5])
+                                .lower()
+                                .replace(" ", "_")
+                            )
+                            # Add default values for new fields
+                            if "goal" not in map_data:
+                                map_data["goal"] = None
+                            if "items" not in map_data:
+                                map_data["items"] = []
+                            self._maps[map_name] = map_data
                             self._available_maps.append(map_name)
-                except Exception as e:
-                    print(f"Error loading map {filename}: {e}")
+                    except Exception as e:
+                        print(f"Error loading map {filename}: {e}")
+
+        # If no maps were loaded, use the default small map
+        if not self._maps:
+            self._available_maps = ["base"]
+            self._maps["base"] = {
+                "name": "Base Map",
+                "grid": DEFAULT_MAP_DATA,
+                "width": 16,
+                "height": 16,
+                "description": "Classic starting map",
+            }
+
+        # Set default current map to first available
+        if self._available_maps:
+            self._current_map = self._available_maps[0]
 
     def get_current_map(self) -> Dict:
         """Get current map data"""
@@ -477,6 +481,10 @@ class GameState:
         self.parse_map()
 
     def to_dict(self) -> Dict[str, Any]:
+        # Get current map data from map manager
+        current_map_data = self.map_manager.get_current_map()
+        grid = current_map_data.get("grid", DEFAULT_MAP_DATA)
+
         return {
             "game_state": self.game_state,
             "player": self.player.to_dict(),
@@ -485,7 +493,10 @@ class GameState:
             "kills": self.kills,
             "hit_effects": [h.to_dict() for h in self.hit_effects],
             "current_map": self.current_map,
-            "map_name": self.map_manager.get_current_map().get("name", "Unknown"),
+            "map_name": current_map_data.get("name", "Unknown"),
+            "grid": grid,
+            "map_width": len(grid[0]) if grid else 0,
+            "map_height": len(grid) if grid else 0,
             "goal": self.goal,
             "goal_reached": self.goal_reached,
             "items": [i.to_dict() for i in self.items],
