@@ -225,9 +225,12 @@ class Menu(IUIComponent):
 class OptionsMenu(Menu):
     """Options menu with map selection."""
 
-    def __init__(self, current_map: str, on_map_change: Callable):
+    def __init__(
+        self, current_map: str, on_map_change: Callable, on_back: Callable = None
+    ):
         self.current_map = current_map
         self.on_map_change = on_map_change
+        self.on_back = on_back
         self.maps = self._get_available_maps()
         self.selected_map_index = (
             self.maps.index(current_map) if current_map in self.maps else 0
@@ -235,7 +238,7 @@ class OptionsMenu(Menu):
 
         # Create items for each map
         items = [MenuItem(f"MAP: {m}") for m in self.maps]
-        items.append(MenuItem("BACK"))
+        items.append(MenuItem("BACK", callback=on_back))
 
         super().__init__("OPTIONS", items)
 
@@ -269,8 +272,9 @@ class OptionsMenu(Menu):
                         self.current_map = selected_map
                         self.on_map_change(selected_map)
                 else:
-                    # Back - do nothing, let game handle it
-                    pass
+                    # Back - call the callback to return to main menu
+                    if self.on_back:
+                        self.on_back()
                 return True
         return False
 

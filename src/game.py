@@ -73,7 +73,9 @@ class Game:
         self.main_menu.items[2].callback = self._on_quit  # Quit
 
         # Create options menu with map selection
-        self.options_menu = OptionsMenu(self.current_map, self._on_map_changed)
+        self.options_menu = OptionsMenu(
+            self.current_map, self._on_map_changed, self._on_back_from_options
+        )
 
     def _on_start_game(self) -> None:
         """Callback for start game menu item."""
@@ -93,7 +95,9 @@ class Game:
         """Callback when map is changed in options."""
         self.current_map = map_name
         # Refresh options menu
-        self.options_menu = OptionsMenu(self.current_map, self._on_map_changed)
+        self.options_menu = OptionsMenu(
+            self.current_map, self._on_map_changed, self._on_back_from_options
+        )
         self.ui_manager.register("options_menu", self.options_menu)
         print(f"Map changed to: {map_name}")
 
@@ -179,6 +183,7 @@ class Game:
                     self.ui_manager.set_active("hud")
             elif event.key == pygame.K_SPACE:
                 self.game_engine.state.pending_input["Space"] = True
+                self.game_engine.attack()
         elif event.type == pygame.KEYUP:
             if event.key == pygame.K_SPACE:
                 self.game_engine.state.pending_input["Space"] = False
