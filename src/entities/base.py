@@ -22,6 +22,19 @@ class Component(ABC):
         """Set the entity this component belongs to."""
         self._entity = value
 
+    def on_attach(self, entity: "Entity") -> None:
+        """
+        Called when this component is attached to an entity.
+
+        Args:
+            entity: The entity this component is being attached to
+        """
+        pass
+
+    def on_detach(self) -> None:
+        """Called when this component is removed from an entity."""
+        pass
+
 
 class Entity(ABC):
     """
@@ -46,6 +59,33 @@ class Entity(ABC):
         self.id = entity_id
         self._components: Dict[str, Component] = {}
         self._tags: Set[str] = set()
+        self.on_create()
+
+    def on_create(self) -> None:
+        """Called when the entity is created in the world."""
+        pass
+
+    def on_destroy(self) -> None:
+        """Called when the entity is destroyed."""
+        pass
+
+    def on_component_added(self, component: Component) -> None:
+        """
+        Called when a component is added to this entity.
+
+        Args:
+            component: The component that was added
+        """
+        pass
+
+    def on_component_removed(self, component_name: str) -> None:
+        """
+        Called when a component is removed from this entity.
+
+        Args:
+            component_name: Name of the component that was removed
+        """
+        pass
 
     def get_component(self, name: str) -> Optional[Component]:
         """
@@ -71,7 +111,9 @@ class Entity(ABC):
             name = component.__class__.__name__
 
         component.entity = self
+        component.on_attach(self)
         self._components[name] = component
+        self.on_component_added(component)
 
     def remove_component(self, name: str) -> None:
         """
@@ -81,8 +123,11 @@ class Entity(ABC):
             name: Name of the component to remove
         """
         if name in self._components:
-            self._components[name].entity = None
+            component = self._components[name]
+            component.on_detach()
+            component.entity = None
             del self._components[name]
+            self.on_component_removed(name)
 
     def has_component(self, name: str) -> bool:
         """
