@@ -1,0 +1,183 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "WebDoom Protocol",
+  "description": "Message protocol schema for WebDoom game client-server communication",
+  "definitions": {
+    "player": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "angle": { "type": "number" },
+        "health": { "type": "integer", "minimum": 0 },
+        "attack_cooldown": { "type": "number", "minimum": 0 }
+      },
+      "required": ["x", "y", "angle", "health"]
+    },
+    "enemy": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "angle": { "type": "number" },
+        "health": { "type": "integer", "minimum": 0 },
+        "state": { "type": "string", "enum": ["patrol", "chase", "attack", "dying", "dead"] },
+        "dying_progress": { "type": "number", "minimum": 0 },
+        "attack_cooldown": { "type": "number", "minimum": 0 }
+      },
+      "required": ["x", "y", "angle", "health", "state"]
+    },
+    "corpse": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      },
+      "required": ["x", "y"]
+    },
+    "hitEffect": {
+      "type": "object",
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "timer": { "type": "number", "minimum": 0 }
+      },
+      "required": ["x", "y", "timer"]
+    }
+  },
+  "oneOf": [
+    {
+      "description": "Client sends input to server",
+      "type": "object",
+      "properties": {
+        "type": { "const": "input" },
+        "keys": {
+          "type": "object",
+          "additionalProperties": { "type": "boolean" }
+        }
+      },
+      "required": ["type", "keys"]
+    },
+    {
+      "description": "Client sends action to server",
+      "type": "object",
+      "properties": {
+        "type": { "const": "action" },
+        "action": { "type": "string", "enum": ["attack", "use_item", "interact"] },
+        "target": { "type": "string" }
+      },
+      "required": ["type", "action"]
+    },
+    {
+      "description": "Server sends full state to client",
+      "type": "object",
+      "properties": {
+        "type": { "const": "state" },
+        "mode": { "const": "full" },
+        "timestamp": { "type": "number" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "game_state": { "type": "string", "enum": ["menu", "playing", "victory", "defeat", "pause"] },
+            "player": { "$ref": "#/definitions/player" },
+            "enemies": { "type": "array", "items": { "$ref": "#/definitions/enemy" } },
+            "corpses": { "type": "array", "items": { "$ref": "#/definitions/corpse" } },
+            "kills": { "type": "integer", "minimum": 0 },
+            "hit_effects": { "type": "array", "items": { "$ref": "#/definitions/hitEffect" } }
+          },
+          "required": ["game_state", "player"]
+        }
+      },
+      "required": ["type", "mode", "data"]
+    },
+    {
+      "description": "Server sends delta state to client",
+      "type": "object",
+      "properties": {
+        "type": { "const": "state" },
+        "mode": { "const": "delta" },
+        "timestamp": { "type": "number" },
+        "data": {
+          "type": "object",
+          "properties": {
+            "mode": { "const": "delta" },
+            "changes": { "type": "object" },
+            "removed": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["mode", "changes"]
+        }
+      },
+      "required": ["type", "mode", "data"]
+    },
+    {
+      "description": "Server sends event to client",
+      "type": "object",
+      "properties": {
+        "type": { "const": "event" },
+        "event": { "type": "string" },
+        "data": { "type": "object" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["type", "event"]
+    },
+    {
+      "description": "Server sends sync message",
+      "type": "object",
+      "properties": {
+        "type": { "const": "sync" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["type", "timestamp"]
+    },
+    {
+      "description": "Client requests game state",
+      "type": "object",
+      "properties": {
+        "type": { "const": "get_state" }
+      },
+      "required": ["type"]
+    },
+    {
+      "description": "Client starts game",
+      "type": "object",
+      "properties": {
+        "type": { "const": "start" }
+      },
+      "required": ["type"]
+    },
+    {
+      "description": "Client resumes game",
+      "type": "object",
+      "properties": {
+        "type": { "const": "resume" }
+      },
+      "required": ["type"]
+    },
+    {
+      "description": "Client returns to menu",
+      "type": "object",
+      "properties": {
+        "type": { "const": "menu" }
+      },
+      "required": ["type"]
+    },
+    {
+      "description": "Client attacks",
+      "type": "object",
+      "properties": {
+        "type": { "const": "attack" }
+      },
+      "required": ["type"]
+    },
+    {
+      "description": "Client sends console command",
+      "type": "object",
+      "properties": {
+        "type": { "const": "console_command" },
+        "command": { "type": "string" },
+        "value": { "type": ["number", "string", "boolean"] }
+      },
+      "required": ["type", "command"]
+    }
+  ]
+}
