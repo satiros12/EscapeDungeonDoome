@@ -3,7 +3,7 @@ Entity Base - Base class for all game entities
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Set
 
 
 class Component(ABC):
@@ -45,6 +45,7 @@ class Entity(ABC):
         """
         self.id = entity_id
         self._components: Dict[str, Component] = {}
+        self._tags: Set[str] = set()
 
     def get_component(self, name: str) -> Optional[Component]:
         """
@@ -99,6 +100,23 @@ class Entity(ABC):
     def components(self) -> Dict[str, Component]:
         """Get all components attached to this entity."""
         return self._components
+
+    @property
+    def tags(self) -> Set[str]:
+        """Get all tags attached to this entity."""
+        return self._tags
+
+    def add_tag(self, tag: str) -> None:
+        """Add a tag to this entity."""
+        self._tags.add(tag)
+
+    def remove_tag(self, tag: str) -> None:
+        """Remove a tag from this entity."""
+        self._tags.discard(tag)
+
+    def has_tag(self, tag: str) -> bool:
+        """Check if entity has a specific tag."""
+        return tag in self._tags
 
     @abstractmethod
     def update(self, dt: float) -> None:

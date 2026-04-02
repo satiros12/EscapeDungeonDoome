@@ -22,6 +22,10 @@ class EventType(Enum):
     WEAPON_HIT = "weapon_hit"
     MAP_CHANGE = "map_change"
     CONSOLE_COMMAND = "console_command"
+    ENTITY_CREATED = "entity_created"
+    ENTITY_DESTROYED = "entity_destroyed"
+    COMPONENT_ADDED = "component_added"
+    COMPONENT_REMOVED = "component_removed"
 
 
 @dataclass
