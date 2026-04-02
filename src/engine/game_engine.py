@@ -26,7 +26,8 @@ from engine.game_state import GameState, Player, Enemy, EnemyType
 from engine.event_system import EventSystem, EventType
 from physics import Physics
 from physics.physics import IPhysics
-from engine.system_registry import SystemRegistry
+from world.world import World
+from world.factories import WorldFactory
 
 
 class GameEngine:
@@ -38,8 +39,14 @@ class GameEngine:
         self.event_system = EventSystem()
         # Initialize physics with map grid after map is loaded
         self.physics: IPhysics = Physics()
-        self.system_registry = SystemRegistry()
-        self.system_registry.initialize(self.state, self.physics)
+        # Use World with WorldFactory instead of SystemRegistry
+        self.world: World = WorldFactory.create_game_world(
+            state=self.state,
+            physics=self.physics,
+            event_system=self.event_system,
+        )
+        # Keep backward compatibility - expose systems for direct access
+        self._systems = {s.__class__.__name__: s for s in self.world._systems}
         self.dt = 0.0
         self.running = True
         self.paused = False
@@ -83,8 +90,8 @@ class GameEngine:
         self.dt = dt
 
         if self.state.game_state == "playing":
-            # Use systems for game logic
-            self.system_registry.update_all(dt)
+            # Use world for game logic
+            self.world.update(dt)
             # Raycasting for renderer (still needed)
             self._cast_rays()
 
@@ -149,7 +156,10 @@ class GameEngine:
 
     def attack(self) -> None:
         """Player performs an attack through combat system."""
-        self.system_registry.combat_system.player_attack()
+        # Access combat system from world for backward compatibility
+        combat_system = self._systems.get("CombatSystem")
+        if combat_system:
+            combat_system.player_attack()
 
     def get_state(self) -> Dict[str, Any]:
         """Get current game state for serialization."""
