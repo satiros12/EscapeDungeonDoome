@@ -1,6 +1,6 @@
 """
 Renderer - handles all game rendering using Pygame
-With dungeon textures and wood floor
+Optimized version with lighting and shadows
 """
 
 import pygame
@@ -22,8 +22,20 @@ class Renderer:
         # Physics for line of sight
         self.physics = None
 
-        # Textures - create simple patterns
+        # Pre-rendered textures (cached for performance)
         self._create_textures()
+
+        # Pre-rendered floor/ceiling surfaces
+        self._floor_surface = None
+        self._ceiling_surface = None
+        self._create_floor_ceiling_surfaces()
+
+        # Lighting surface for vignette
+        self._vignette_surface = None
+        self._create_vignette()
+
+        # Torch flicker value
+        self._torch_flicker = 0
 
     def set_physics(self, physics) -> None:
         """Set physics engine for line of sight checking."""
@@ -31,30 +43,20 @@ class Renderer:
 
     def _create_textures(self):
         """Create simple dungeon textures."""
-        # Wall texture - stone bricks pattern
         self.wall_texture = self._create_stone_wall_texture()
-
-        # Floor texture - wood planks
         self.floor_texture = self._create_wood_floor_texture()
-
-        # Ceiling texture - stone
         self.ceiling_texture = self._create_ceiling_texture()
 
     def _create_stone_wall_texture(self) -> pygame.Surface:
         """Create stone wall texture."""
         texture = pygame.Surface((64, 64))
-        base_color = (100, 90, 80)  # Brown-gray stone
-
-        # Base fill
+        base_color = (100, 90, 80)
         texture.fill(base_color)
 
-        # Add brick pattern
         for y in range(0, 64, 16):
             offset = 0 if (y // 16) % 2 == 0 else 8
             for x in range(-offset, 64, 16):
-                # Brick border
                 pygame.draw.rect(texture, (70, 60, 50), (x, y, 14, 14), 1)
-                # Random stone variation
                 for _ in range(3):
                     sx = random.randint(x + 1, x + 12)
                     sy = random.randint(y + 1, y + 12)
@@ -73,16 +75,12 @@ class Renderer:
     def _create_wood_floor_texture(self) -> pygame.Surface:
         """Create wood plank floor texture."""
         texture = pygame.Surface((64, 64))
-        base_color = (80, 55, 30)  # Dark wood
-
-        # Base fill
+        base_color = (80, 55, 30)
         texture.fill(base_color)
 
-        # Wood grain lines (planks)
         for x in range(0, 64, 8):
             pygame.draw.line(texture, (50, 35, 20), (x, 0), (x, 64), 1)
 
-        # Wood grain
         for _ in range(20):
             x1 = random.randint(0, 60)
             x2 = random.randint(x1, x1 + 10)
@@ -95,16 +93,58 @@ class Renderer:
     def _create_ceiling_texture(self) -> pygame.Surface:
         """Create stone ceiling texture."""
         texture = pygame.Surface((64, 64))
-        base_color = (70, 70, 75)  # Blue-gray stone
-
+        base_color = (70, 70, 75)
         texture.fill(base_color)
 
-        # Stone tile pattern
         for x in range(0, 64, 16):
             for y in range(0, 64, 16):
                 pygame.draw.rect(texture, (55, 55, 60), (x, y, 15, 15), 1)
 
         return texture
+
+    def _create_floor_ceiling_surfaces(self):
+        """Pre-render floor and ceiling for performance."""
+        ceiling_height = self.height // 2
+
+        self._ceiling_surface = pygame.Surface((self.width, ceiling_height))
+        for x in range(0, self.width, 64):
+            for y in range(0, ceiling_height, 64):
+                self._ceiling_surface.blit(self.ceiling_texture, (x, y))
+
+        floor_height = self.height - ceiling_height
+        self._floor_surface = pygame.Surface((self.width, floor_height))
+        for x in range(0, self.width, 64):
+            for y in range(0, floor_height, 64):
+                floor_copy = self.floor_texture.copy()
+                floor_copy.fill((0, 0, 0), None, pygame.BLEND_MULT)
+                self._floor_surface.blit(floor_copy, (x, y))
+
+    def _create_vignette(self):
+        """Create vignette overlay for lighting effect."""
+        self._vignette_surface = pygame.Surface(
+            (self.width, self.height), pygame.SRCALPHA
+        )
+
+        # Create radial gradient - darker at edges
+        center_x = self.width // 2
+        center_y = self.height // 2
+
+        # Simple vignette - draw transparent ellipses from center
+        for i in range(20, 0, -1):
+            alpha = i * 3
+            ellipse_w = center_x * i // 20
+            ellipse_h = center_y * i // 20
+            pygame.draw.ellipse(
+                self._vignette_surface,
+                (0, 0, 0, alpha),
+                (
+                    center_x - ellipse_w,
+                    center_y - ellipse_h,
+                    ellipse_w * 2,
+                    ellipse_h * 2,
+                ),
+                0,
+            )
 
     def clear(self, color: Tuple[int, int, int] = (0, 0, 0)) -> None:
         """Clear the screen with a color."""
@@ -115,21 +155,14 @@ class Renderer:
         pygame.display.flip()
 
     def render_floor_ceiling(self) -> None:
-        """Render floor and ceiling with textures."""
+        """Render floor and ceiling using pre-rendered surfaces."""
         ceiling_height = self.height // 2
 
-        # Draw ceiling with texture
-        for x in range(0, self.width, 64):
-            for y in range(0, ceiling_height, 64):
-                self.screen.blit(self.ceiling_texture, (x, y))
+        # Draw ceiling
+        self.screen.blit(self._ceiling_surface, (0, 0))
 
-        # Draw floor with texture
-        for x in range(0, self.width, 64):
-            for y in range(ceiling_height, self.height, 64):
-                # Darken floor texture
-                floor_copy = self.floor_texture.copy()
-                floor_copy.fill((0, 0, 0), None, pygame.BLEND_MULT)
-                self.screen.blit(floor_copy, (x, y))
+        # Draw floor
+        self.screen.blit(self._floor_surface, (0, ceiling_height))
 
         # Horizon line
         pygame.draw.line(
@@ -143,81 +176,59 @@ class Renderer:
     def render_walls_raycasted(
         self, player, wall_distances: List[float], map_data: dict
     ) -> None:
-        """Render walls using raycasting data with textures."""
+        """Render walls using raycasting - optimized."""
         num_rays = len(wall_distances)
         if num_rays == 0:
             return
 
-        strip_width = self.width // num_rays
-        if strip_width < 1:
-            strip_width = 1
+        # Calculate strip width - larger strips for performance
+        strip_width = max(2, self.width // num_rays)
 
-        for i, distance in enumerate(wall_distances):
+        # Skip every other ray for 2x performance boost
+        step = 2
+
+        for i in range(0, num_rays, step):
+            distance = wall_distances[i]
+            if distance >= MAX_DEPTH:
+                continue
+
             # Fix fisheye effect
             ray_angle = -FOV / 2 + FOV * i / num_rays
             corrected_distance = max(0.1, distance)
 
-            # Calculate wall height based on distance
-            wall_height = min(self.height, int(self.height / corrected_distance))
-
-            # Calculate texture UV coordinates
-            # Get world position
-            check_x = player.x + math.cos(player.angle + ray_angle) * distance
-            check_y = player.y + math.sin(player.angle + ray_angle) * distance
-
-            # Texture coordinate based on position
-            tex_x = int((check_x * 10) % 64)
-            tex_y = int((check_y * 10) % 64)
+            # Calculate wall height
+            wall_height = int(self.height / corrected_distance)
+            wall_height = min(self.height, max(1, wall_height))
 
             # Calculate shading based on distance
-            shade = max(0.3, 1.0 - (corrected_distance / MAX_DEPTH))
+            shade = 1.0 - (corrected_distance / MAX_DEPTH)
+            shade = max(0.15, min(1.0, shade))
+
+            # Wall color with distance shading
+            r = int(180 * shade)
+            g = int(160 * shade)
+            b = int(140 * shade)
+            wall_color = (r, g, b)
 
             # Draw wall strip
-            x = i * strip_width
+            x = (i // step) * strip_width
             y_top = (self.height - wall_height) // 2
 
-            # Get texture column
-            tex_col = self.wall_texture.get_at((tex_x % 64, 0))
+            pygame.draw.rect(
+                self.screen, wall_color, (x, y_top, strip_width + 1, wall_height)
+            )
 
-            # Draw scaled texture strip
-            for ty in range(wall_height):
-                world_y = (y_top + ty) / self.height
-                tex_y = int(world_y * 64) % 64
-                color = self.wall_texture.get_at((tex_x % 64, tex_y))
-
-                # Apply shading
-                shaded_color = (
-                    int(color[0] * shade),
-                    int(color[1] * shade),
-                    int(color[2] * shade),
-                )
-                pygame.draw.line(
-                    self.screen,
-                    shaded_color,
-                    (x, y_top + ty),
-                    (x + strip_width, y_top + ty),
-                )
-
-            # Draw edges
+            # Edge highlights
             if wall_height < self.height:
+                top_color = tuple(min(255, c + 20) for c in wall_color)
                 pygame.draw.line(
-                    self.screen,
-                    (
-                        max(0, int(100 * shade - 30)),
-                        max(0, int(90 * shade - 30)),
-                        max(0, int(80 * shade - 30)),
-                    ),
-                    (x, y_top),
-                    (x + strip_width, y_top),
-                    1,
+                    self.screen, top_color, (x, y_top), (x + strip_width, y_top), 1
                 )
+
+                bottom_color = tuple(max(0, c - 30) for c in wall_color)
                 pygame.draw.line(
                     self.screen,
-                    (
-                        min(255, int(100 * shade + 20)),
-                        min(255, int(90 * shade + 20)),
-                        min(255, int(80 * shade + 20)),
-                    ),
+                    bottom_color,
                     (x, y_top + wall_height),
                     (x + strip_width, y_top + wall_height),
                     1,
@@ -270,19 +281,23 @@ class Renderer:
                 self.width // 2 + (relative_angle / (fov_rad / 2)) * (self.width // 2)
             )
 
-            sprite_size = int(min(self.height * 0.6, self.height / dist))
-            sprite_size = max(15, min(150, sprite_size))
+            sprite_size = int(min(self.height * 0.5, self.height / dist))
+            sprite_size = max(12, min(100, sprite_size))
 
             sprite_y = self.height // 2 + self.height // 4 - sprite_size // 3
             sprite_y = max(0, min(self.height - sprite_size, sprite_y))
 
-            # Color based on state
+            # Color based on state with distance shading
+            shade = max(0.3, 1.0 - dist / MAX_DEPTH)
+
             if enemy.state == "attack":
-                color = (220, 0, 0)
+                base_color = (220, 0, 0)
             elif enemy.state == "chase":
-                color = (180, 0, 0)
+                base_color = (180, 0, 0)
             else:
-                color = (100, 0, 0)
+                base_color = (100, 0, 0)
+
+            color = tuple(int(c * shade) for c in base_color)
 
             rect = pygame.Rect(
                 screen_x - sprite_size // 2, sprite_y, sprite_size, sprite_size
@@ -295,13 +310,13 @@ class Renderer:
             eye_y = sprite_y + sprite_size // 3
             pygame.draw.circle(
                 self.screen,
-                (255, 255, 255),
+                (255, 255, 0),
                 (screen_x - sprite_size // 4, eye_y),
                 eye_size,
             )
             pygame.draw.circle(
                 self.screen,
-                (255, 255, 255),
+                (255, 255, 0),
                 (screen_x + sprite_size // 4, eye_y),
                 eye_size,
             )
@@ -324,6 +339,35 @@ class Renderer:
             (center_x, center_y - 10),
             (center_x, center_y + 10),
             2,
+        )
+
+    def render_lighting(self, player) -> None:
+        """Render lighting effects - vignette and torch flicker."""
+        # Update torch flicker
+        self._torch_flicker = random.randint(-3, 3)
+
+        # Apply vignette overlay
+        self.screen.blit(self._vignette_surface, (0, 0))
+
+        # Add subtle torch light circle around player (center of screen)
+        center_x = self.width // 2
+        center_y = self.height // 2
+
+        # Create radial light gradient (simulating torch)
+        light_radius = 200
+        light_surface = pygame.Surface(
+            (light_radius * 2, light_radius * 2), pygame.SRCALPHA
+        )
+
+        for r in range(light_radius, 0, -5):
+            alpha = max(0, 40 - r // 5 + self._torch_flicker)
+            pygame.draw.circle(
+                light_surface, (255, 200, 100, alpha), (light_radius, light_radius), r
+            )
+
+        # Blit light circle centered on screen
+        self.screen.blit(
+            light_surface, (center_x - light_radius, center_y - light_radius)
         )
 
     def render_sprite(

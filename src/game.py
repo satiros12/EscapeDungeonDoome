@@ -292,6 +292,9 @@ class Game:
         # Render crosshair
         self.renderer.render_crosshair()
 
+        # Render lighting effects (vignette, torch)
+        self.renderer.render_lighting(player)
+
         # Render HUD
         self.hud.render(
             self.screen,
