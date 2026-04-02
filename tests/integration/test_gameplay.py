@@ -7,7 +7,7 @@ import math
 import sys
 import os
 
-# Add src to path
+# Add src to path - ensure correct config is loaded
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 
@@ -165,7 +165,7 @@ class TestGameplay:
         state.enemies = []  # No enemies
 
         combat = CombatSystem(state)
-        combat._check_conditions()
+        combat._check_win_condition()
 
         assert state.game_state == "victory"
 
