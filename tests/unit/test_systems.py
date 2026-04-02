@@ -143,10 +143,11 @@ class TestEnemyAISystem:
         """Enemy should chase player when in range"""
         state.reset()
         state.game_state = "playing"
-        state.player.x = 3
+        # Use valid floor positions from the new map
+        state.player.x = 5
         state.player.y = 3
-        state.enemies[0].x = 2
-        state.enemies[0].y = 2
+        state.enemies[0].x = 3
+        state.enemies[0].y = 3
 
         for _ in range(10):
             enemy_system.update(0.016)
@@ -157,10 +158,11 @@ class TestEnemyAISystem:
         """Enemy should attack when close to player"""
         state.reset()
         state.game_state = "playing"
-        state.player.x = 2.5
-        state.player.y = 2.5
-        state.enemies[0].x = 2
-        state.enemies[0].y = 2
+        # Use valid floor positions from the new map
+        state.player.x = 4.5
+        state.player.y = 3.5
+        state.enemies[0].x = 3
+        state.enemies[0].y = 3
         state.enemies[0].state = "chase"
 
         for _ in range(20):
