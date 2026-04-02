@@ -31,6 +31,10 @@ class Game:
         self.input_handler = InputHandler()
         self.renderer = Renderer(self.screen)
         self.game_engine = GameEngine(self.screen)
+
+        # Connect physics to renderer for line-of-sight check
+        self.renderer.set_physics(self.game_engine.physics)
+
         self.hud = HUD(SCREEN_WIDTH, SCREEN_HEIGHT)
         self.console = Console(self.screen)
 

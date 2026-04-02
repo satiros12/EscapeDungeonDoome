@@ -25,6 +25,7 @@ from config import (
 )
 from engine.game_state import GameState, Player, Enemy, EnemyType
 from engine.event_system import EventSystem, EventType
+from physics import Physics
 
 
 class GameEngine:
@@ -34,6 +35,7 @@ class GameEngine:
         self.screen = screen
         self.state = GameState()
         self.event_system = EventSystem()
+        self.physics = Physics(self.state)
         self.dt = 0.0
         self.running = True
         self.paused = False
