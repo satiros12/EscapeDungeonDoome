@@ -4,8 +4,8 @@ Components - Abstract and concrete component classes for entities
 
 import math
 from abc import ABC
-from typing import Optional, Tuple
-from entities.base import Component
+from typing import Optional, Tuple, Dict, Any
+from entities.base import Component, SerializableComponent
 
 
 class PositionComponent(Component):
@@ -82,6 +82,36 @@ class PositionComponent(Component):
         dy = y - self.y
         return math.sqrt(dx * dx + dy * dy)
 
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert component to dictionary for serialization.
+
+        Returns:
+            Dictionary representation of the component
+        """
+        return {
+            "x": self.x,
+            "y": self.y,
+            "angle": self.angle,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "PositionComponent":
+        """
+        Create component from dictionary representation.
+
+        Args:
+            data: Dictionary containing component data
+
+        Returns:
+            New PositionComponent instance
+        """
+        return cls(
+            x=data.get("x", 0.0),
+            y=data.get("y", 0.0),
+            angle=data.get("angle", 0.0),
+        )
+
 
 class HealthComponent(Component):
     """
@@ -143,6 +173,35 @@ class HealthComponent(Component):
         """
         return self.health / self.max_health if self.max_health > 0 else 0.0
 
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert component to dictionary for serialization.
+
+        Returns:
+            Dictionary representation of the component
+        """
+        return {
+            "health": self.health,
+            "max_health": self.max_health,
+            "is_dead": self.is_dead,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "HealthComponent":
+        """
+        Create component from dictionary representation.
+
+        Args:
+            data: Dictionary containing component data
+
+        Returns:
+            New HealthComponent instance
+        """
+        return cls(
+            health=data.get("health", 100),
+            max_health=data.get("max_health", 100),
+        )
+
 
 class AIComponent(Component):
     """
@@ -189,6 +248,39 @@ class AIComponent(Component):
             True if attack cooldown is zero and not dying
         """
         return self.attack_cooldown <= 0 and self.state != "dying"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert component to dictionary for serialization.
+
+        Returns:
+            Dictionary representation of the component
+        """
+        return {
+            "enemy_type": self.enemy_type,
+            "state": self.state,
+            "target": self.target,
+            "patrol_dir": self.patrol_dir,
+            "attack_cooldown": self.attack_cooldown,
+            "dying_progress": self.dying_progress,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "AIComponent":
+        """
+        Create component from dictionary representation.
+
+        Args:
+            data: Dictionary containing component data
+
+        Returns:
+            New AIComponent instance
+        """
+        return cls(
+            enemy_type=data.get("enemy_type", "imp"),
+            state=data.get("state", "patrol"),
+            target=data.get("target"),
+        )
 
 
 class CombatComponent(Component):
@@ -242,6 +334,36 @@ class CombatComponent(Component):
         """
         if self.attack_cooldown > 0:
             self.attack_cooldown -= dt
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert component to dictionary for serialization.
+
+        Returns:
+            Dictionary representation of the component
+        """
+        return {
+            "attack_cooldown": self.attack_cooldown,
+            "attack_range": self.attack_range,
+            "attack_damage": self.attack_damage,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CombatComponent":
+        """
+        Create component from dictionary representation.
+
+        Args:
+            data: Dictionary containing component data
+
+        Returns:
+            New CombatComponent instance
+        """
+        return cls(
+            attack_cooldown=data.get("attack_cooldown", 0.5),
+            attack_range=data.get("attack_range", 1.5),
+            attack_damage=data.get("attack_damage", 10),
+        )
 
 
 class PlayerInputComponent(Component):

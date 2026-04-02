@@ -36,6 +36,37 @@ class Component(ABC):
         pass
 
 
+class SerializableComponent(Component):
+    """
+    Base class for components that support serialization.
+
+    Extends Component with to_dict() and from_dict() class methods
+    for converting components to and from dictionary representations.
+    """
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Convert component to dictionary for serialization.
+
+        Returns:
+            Dictionary representation of the component
+        """
+        return {}
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SerializableComponent":
+        """
+        Create component from dictionary representation.
+
+        Args:
+            data: Dictionary containing component data
+
+        Returns:
+            New component instance
+        """
+        return cls()
+
+
 class Entity(ABC):
     """
     Base class for all game entities.
