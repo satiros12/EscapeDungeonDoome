@@ -2,8 +2,20 @@
 Game facade - coordinates all game components
 """
 
+import os
 import pygame
 from typing import Dict, Optional
+
+# Set SDL drivers for headless environments
+if "SDL_VIDEODRIVER" not in os.environ:
+    # Try to detect if we're in a headless environment
+    if os.environ.get("DISPLAY") is None and os.environ.get("WAYLAND_DISPLAY") is None:
+        os.environ["SDL_VIDEODRIVER"] = "dummy"
+
+# Suppress ALSA audio warnings in headless environments
+if "SDL_AUDIODRIVER" not in os.environ:
+    if os.environ.get("DISPLAY") is None and os.environ.get("WAYLAND_DISPLAY") is None:
+        os.environ["SDL_AUDIODRIVER"] = "dummy"
 
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, MAX_DEPTH
 from input import InputHandler
