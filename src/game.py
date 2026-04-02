@@ -98,7 +98,14 @@ class Game:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self.running = False
-            elif event.key == pygame.K_RETURN:
+            elif event.key in (
+                pygame.K_UP,
+                pygame.K_DOWN,
+                pygame.K_RETURN,
+                pygame.K_w,
+                pygame.K_s,
+            ):
+                # Pass all navigation keys to menu handler
                 self.main_menu.handle_input(event)
         elif event.type == pygame.KEYUP:
             pass  # Menu doesn't need key up events
@@ -136,10 +143,8 @@ class Game:
         state = self.game_engine.state.game_state
 
         if state == "menu":
-            # In menu, check for start input
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_RETURN]:
-                self._on_start_game()
+            # Update menu animations
+            self.main_menu.update(dt)
 
         elif state == "playing":
             # Pass input to game engine
