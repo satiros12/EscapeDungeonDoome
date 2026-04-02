@@ -4,13 +4,14 @@ Game facade - coordinates all game components
 
 import pygame
 import math
+import os
 from typing import Dict, Optional
 
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, MAX_DEPTH
 from input_handler import InputHandler
 from renderer import Renderer
 from engine.game_engine import GameEngine
-from ui.menu import Menu, MenuItem, create_main_menu
+from ui.menu import Menu, MenuItem, create_main_menu, OptionsMenu
 from ui.hud import HUD
 from ui.console import Console
 
@@ -40,7 +41,8 @@ class Game:
 
         # Game state
         self.running = True
-        self.current_menu = None
+        self.current_menu = None  # None = main menu, "options" = options menu
+        self.current_map = "base"  # Default map
         self._create_menus()
 
     def _create_menus(self) -> None:
@@ -49,18 +51,42 @@ class Game:
 
         # Wire up menu callbacks
         self.main_menu.items[0].callback = self._on_start_game  # Start Game
-        self.main_menu.items[1].callback = self._on_options  # Options (placeholder)
+        self.main_menu.items[1].callback = self._on_options  # Options
         self.main_menu.items[2].callback = self._on_quit  # Quit
+
+        # Create options menu with map selection
+        self.options_menu = OptionsMenu(self.current_map, self._on_map_changed)
 
     def _on_start_game(self) -> None:
         """Callback for start game menu item."""
+        # Set the map before starting
+        self.game_engine.state.map_manager.set_map(self.current_map)
         self.game_engine.start_game()
         self.current_menu = None
 
     def _on_options(self) -> None:
         """Callback for options menu item."""
-        # Placeholder - could open options menu
-        pass
+        # Refresh options menu with current map
+        self.options_menu = OptionsMenu(self.current_map, self._on_map_changed)
+        self.current_menu = "options"
+
+    def _on_map_changed(self, map_name: str) -> None:
+        """Callback when map is changed in options."""
+        self.current_map = map_name
+        # Refresh options menu
+        self.options_menu = OptionsMenu(self.current_map, self._on_map_changed)
+        print(f"Map changed to: {map_name}")
+
+    def _on_map_selected(self, map_name: str) -> None:
+        """Callback when a map is selected from options."""
+        if map_name != self.current_map:
+            self.current_map = map_name
+
+    def _on_back_from_options(self) -> None:
+        """Callback to go back to main menu from options."""
+        self.current_menu = None
+        # Reset options menu to current map
+        self.options_menu = OptionsMenu(self.current_map, self._on_map_changed)
 
     def _on_quit(self) -> None:
         """Callback for quit menu item."""
@@ -69,7 +95,7 @@ class Game:
     def run(self) -> None:
         """Main game loop."""
         while self.running:
-            # Calculate delta time
+            # Calculate delta time - enforce 60 FPS
             dt = self.clock.tick(FPS) / 1000.0
 
             # Handle events
@@ -91,14 +117,17 @@ class Game:
 
             # Pass events to appropriate handler
             if self.game_engine.state.game_state == "menu":
-                self._handle_menu_events(event)
+                if self.current_menu == "options":
+                    self._handle_options_events(event)
+                else:
+                    self._handle_main_menu_events(event)
             elif self.game_engine.state.game_state == "pause":
                 self._handle_pause_events(event)
             elif self.game_engine.state.game_state == "playing":
                 self._handle_playing_events(event)
 
-    def _handle_menu_events(self, event: pygame.event.Event) -> None:
-        """Handle events while in menu state."""
+    def _handle_main_menu_events(self, event: pygame.event.Event) -> None:
+        """Handle events while in main menu."""
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self.running = False
@@ -109,10 +138,32 @@ class Game:
                 pygame.K_w,
                 pygame.K_s,
             ):
-                # Pass all navigation keys to menu handler
                 self.main_menu.handle_input(event)
         elif event.type == pygame.KEYUP:
-            pass  # Menu doesn't need key up events
+            pass
+
+    def _handle_options_events(self, event: pygame.event.Event) -> None:
+        """Handle events while in options menu."""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                # Go back to main menu
+                self._on_back_from_options()
+            elif event.key in (
+                pygame.K_UP,
+                pygame.K_DOWN,
+                pygame.K_RETURN,
+                pygame.K_w,
+                pygame.K_s,
+            ):
+                self.options_menu.handle_input(event)
+                # Check if "Back" was selected (last item)
+                if (
+                    event.key == pygame.K_RETURN
+                    and self.options_menu.selected_index == len(self.options_menu.maps)
+                ):
+                    self._on_back_from_options()
+        elif event.type == pygame.KEYUP:
+            pass
 
     def _handle_pause_events(self, event: pygame.event.Event) -> None:
         """Handle events while paused."""
@@ -148,7 +199,10 @@ class Game:
 
         if state == "menu":
             # Update menu animations
-            self.main_menu.update(dt)
+            if self.current_menu == "options":
+                self.options_menu.update(dt)
+            else:
+                self.main_menu.update(dt)
 
         elif state == "playing":
             # Pass input to game engine
@@ -178,17 +232,20 @@ class Game:
 
     def _render(self) -> None:
         """Render the game."""
-        state = self.game_engine.state.game_state
+        game_state = self.game_engine.state.game_state
 
-        if state == "menu":
-            self._render_menu()
-        elif state == "playing":
+        if game_state == "menu":
+            if self.current_menu == "options":
+                self._render_options()
+            else:
+                self._render_menu()
+        elif game_state == "playing":
             self._render_playing()
-        elif state == "pause":
+        elif game_state == "pause":
             self._render_pause()
-        elif state == "victory":
+        elif game_state == "victory":
             self._render_victory()
-        elif state == "defeat":
+        elif game_state == "defeat":
             self._render_defeat()
 
         # Render console on top if active
@@ -202,6 +259,11 @@ class Game:
         """Render main menu."""
         self.renderer.clear((0, 0, 0))
         self.main_menu.render(self.screen)
+
+    def _render_options(self) -> None:
+        """Render options menu."""
+        self.renderer.clear((0, 0, 0))
+        self.options_menu.render(self.screen)
 
     def _render_playing(self) -> None:
         """Render the game while playing."""
@@ -235,7 +297,7 @@ class Game:
             self.screen,
             player.health,
             self.game_engine.state.kills,
-            "fists",  # Could be extended to weapon system
+            "fists",
         )
 
     def _render_pause(self) -> None:

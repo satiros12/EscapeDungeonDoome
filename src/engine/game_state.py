@@ -35,6 +35,7 @@ class MapManager:
         self._current_map: str = "base"
         self._available_maps: List[str] = ["base"]
         self._load_default_maps()
+        self._load_maps_from_files()
 
     def _load_default_maps(self) -> None:
         """Load default maps."""
@@ -45,6 +46,42 @@ class MapManager:
             "height": 16,
             "description": "Classic starting map",
         }
+
+    def _load_maps_from_files(self) -> None:
+        """Load maps from files in maps/ directory."""
+        # Try to find maps directory relative to this file or project root
+        import os
+
+        # Try different paths
+        possible_paths = [
+            os.path.join(os.path.dirname(os.path.dirname(__file__)), "maps"),
+            os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "maps"
+            ),
+            "maps",
+            "../maps",
+        ]
+
+        maps_dir = None
+        for path in possible_paths:
+            if os.path.isdir(path):
+                maps_dir = path
+                break
+
+        if maps_dir and os.path.isdir(maps_dir):
+            for filename in os.listdir(maps_dir):
+                if filename.endswith(".json"):
+                    map_name = filename[:-5]  # Remove .json
+                    try:
+                        import json
+
+                        with open(os.path.join(maps_dir, filename), "r") as f:
+                            map_data = json.load(f)
+                            self._maps[map_name] = map_data
+                            if map_name not in self._available_maps:
+                                self._available_maps.append(map_name)
+                    except Exception as e:
+                        print(f"Error loading map {filename}: {e}")
 
     def get_current_map(self) -> Dict:
         """Get current map data."""
@@ -58,6 +95,13 @@ class MapManager:
         if normalized in self._maps:
             self._current_map = normalized
             return True
+        # Also check available maps in case it wasn't loaded yet
+        if normalized in self._available_maps:
+            # Try to load it
+            self._load_maps_from_files()
+            if normalized in self._maps:
+                self._current_map = normalized
+                return True
         return False
 
     def get_available_maps(self) -> List[str]:
