@@ -1,11 +1,11 @@
 """
 Renderer - handles all game rendering using Pygame
+Simplified version for better clarity
 """
 
 import pygame
 import math
-import random
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, FOV, RAY_COUNT, MAX_DEPTH
 
@@ -18,20 +18,6 @@ class Renderer:
         self.width = screen.get_width()
         self.height = screen.get_height()
 
-        # Wall colors - more varied and colorful
-        self.wall_colors = {
-            0: (180, 140, 100),  # Brown/tan
-            1: (120, 120, 140),  # Gray-blue
-            2: (100, 150, 100),  # Greenish
-            3: (150, 100, 100),  # Reddish
-            4: (100, 100, 150),  # Blueish
-            5: (140, 140, 100),  # Olive
-        }
-
-        # Floor and ceiling colors
-        self.ceiling_color = (40, 40, 50)
-        self.floor_color = (60, 50, 40)
-
     def clear(self, color: Tuple[int, int, int] = (0, 0, 0)) -> None:
         """Clear the screen with a color."""
         self.screen.fill(color)
@@ -41,26 +27,30 @@ class Renderer:
         pygame.display.flip()
 
     def render_floor_ceiling(self) -> None:
-        """Render floor and ceiling with gradient."""
-        # Ceiling - dark blue-gray gradient
+        """Render floor and ceiling with simple solid colors."""
         ceiling_height = self.height // 2
-        for y in range(ceiling_height):
-            shade = int(20 + (y / ceiling_height) * 30)
-            color = (shade, shade + 5, shade + 15)  # Slight blue tint
-            pygame.draw.line(self.screen, color, (0, y), (self.width, y))
 
-        # Floor - brown-ish gradient (like dungeon floor)
-        for y in range(ceiling_height, self.height):
-            progress = (y - ceiling_height) / ceiling_height
-            r = int(50 + progress * 30)
-            g = int(40 + progress * 25)
-            b = int(30 + progress * 20)
-            pygame.draw.line(self.screen, (r, g, b), (0, y), (self.width, y))
+        # Ceiling - solid dark gray
+        pygame.draw.rect(self.screen, (30, 30, 30), (0, 0, self.width, ceiling_height))
+
+        # Floor - solid dark brown
+        pygame.draw.rect(
+            self.screen, (50, 40, 30), (0, ceiling_height, self.width, ceiling_height)
+        )
+
+        # Horizon line
+        pygame.draw.line(
+            self.screen,
+            (80, 60, 40),
+            (0, ceiling_height),
+            (self.width, ceiling_height),
+            2,
+        )
 
     def render_walls_raycasted(
         self, player, wall_distances: List[float], map_data: dict
     ) -> None:
-        """Render walls using raycasting data with better textures."""
+        """Render walls using raycasting data - simplified."""
         num_rays = len(wall_distances)
         if num_rays == 0:
             return
@@ -69,62 +59,55 @@ class Renderer:
         if strip_width < 1:
             strip_width = 1
 
-        # Get map grid for texture variation
-        grid = map_data.get("grid", [])
+        ceiling_height = self.height // 2
 
         for i, distance in enumerate(wall_distances):
             # Fix fisheye effect
             ray_angle = -FOV / 2 + FOV * i / num_rays
-            corrected_distance = distance * math.cos(
-                player.angle - player.angle - ray_angle
-            )
+            corrected_distance = distance * math.cos(player.angle - ray_angle)
             corrected_distance = max(0.1, corrected_distance)
 
             # Calculate wall height based on distance
             wall_height = min(self.height, int(self.height / corrected_distance))
 
-            # Calculate which map cell this ray hits for texture variation
-            check_x = player.x + math.cos(player.angle + ray_angle) * distance
-            check_y = player.y + math.sin(player.angle + ray_angle) * distance
+            # Simple shading based on distance - more dramatic
+            shade = int(255 * (1.0 / (1.0 + corrected_distance * 0.5)))
+            shade = max(30, min(255, shade))
 
-            # Get base color based on position
-            cell_x = int(check_x) if check_x > 0 else 0
-            cell_y = int(check_y) if check_y > 0 else 0
+            # Wall color - simple gray with distance shading
+            wall_color = (shade, shade, shade)
 
-            # Use position hash for variation
-            color_index = (cell_x + cell_y) % len(self.wall_colors)
-            base_color = self.wall_colors[color_index]
-
-            # Apply fog/shading based on distance
-            shade_factor = max(0.2, 1.0 - (corrected_distance / MAX_DEPTH))
-            wall_color = (
-                int(base_color[0] * shade_factor),
-                int(base_color[1] * shade_factor),
-                int(base_color[2] * shade_factor),
-            )
-
-            # Add side shading (vertical edges darker)
+            # Calculate position
             x = i * strip_width
             y_top = (self.height - wall_height) // 2
-            y_bottom = y_top + wall_height
 
-            # Draw wall strip with slight texture
+            # Draw wall
             pygame.draw.rect(
                 self.screen, wall_color, (x, y_top, strip_width + 1, wall_height)
             )
 
-            # Add top/bottom edge highlight
-            if wall_height < self.height:
+            # Draw edges for depth
+            if y_top > 0:
+                # Top edge (ceiling line)
                 pygame.draw.line(
                     self.screen,
-                    tuple(max(0, c - 30) for c in wall_color),
+                    (max(0, shade - 40), max(0, shade - 40), max(0, shade - 40)),
                     (x, y_top),
                     (x + strip_width, y_top),
                     1,
                 )
+            if y_top + wall_height < self.height:
+                # Bottom edge (floor line)
+                pygame.draw.line(
+                    self.screen,
+                    (min(255, shade + 30), min(255, shade + 30), min(255, shade + 30)),
+                    (x, y_top + wall_height),
+                    (x + strip_width, y_top + wall_height),
+                    1,
+                )
 
     def render_enemies(self, player, enemies: List, map_data: dict) -> None:
-        """Render enemies as 2D sprites with better visibility."""
+        """Render enemies as simple 2D sprites."""
         visible_enemies = []
 
         for enemy in enemies:
@@ -167,95 +150,66 @@ class Renderer:
             )
 
             # Calculate sprite size
-            sprite_size = int(min(self.height * 0.8, self.height / dist))
-            sprite_size = max(30, min(250, sprite_size))
+            sprite_size = int(min(self.height * 0.7, self.height / dist))
+            sprite_size = max(20, min(200, sprite_size))
 
-            # Vertical position
-            sprite_y = self.height // 2 + (self.height // 4) - (sprite_size // 3)
+            # Vertical position - on the floor
+            sprite_y = self.height // 2 + self.height // 4 - sprite_size // 3
             sprite_y = max(0, min(self.height - sprite_size, sprite_y))
 
-            # Color based on state - more visible
+            # Simple color based on state
             if enemy.state == "attack":
-                color = (255, 50, 50)  # Bright red
-                outline_color = (255, 200, 200)
+                color = (200, 0, 0)  # Red
             elif enemy.state == "chase":
-                color = (220, 80, 60)  # Red-orange
-                outline_color = (255, 150, 150)
+                color = (180, 50, 50)  # Dark red
             else:
-                color = (160, 60, 60)  # Dark red
-                outline_color = (200, 150, 150)
+                color = (120, 40, 40)  # Darker red
 
-            # Draw enemy as rounded rectangle
+            # Draw enemy as simple square
             rect = pygame.Rect(
                 screen_x - sprite_size // 2, sprite_y, sprite_size, sprite_size
             )
-
-            # Fill
             pygame.draw.rect(self.screen, color, rect)
 
-            # Outline
-            pygame.draw.rect(self.screen, outline_color, rect, 3)
+            # White outline
+            pygame.draw.rect(self.screen, (255, 255, 255), rect, 2)
 
-            # Add "eyes" to make it look like a creature
-            eye_size = sprite_size // 6
+            # Two white eyes
+            eye_size = max(3, sprite_size // 8)
             eye_y = sprite_y + sprite_size // 3
             pygame.draw.circle(
                 self.screen,
-                (255, 255, 0),
+                (255, 255, 255),
                 (screen_x - sprite_size // 4, eye_y),
                 eye_size,
             )
             pygame.draw.circle(
                 self.screen,
-                (255, 255, 0),
+                (255, 255, 255),
                 (screen_x + sprite_size // 4, eye_y),
                 eye_size,
             )
-
-            # Health bar above enemy
-            if enemy.health < 30:
-                bar_width = sprite_size
-                bar_height = 5
-                health_pct = enemy.health / 30
-                pygame.draw.rect(
-                    self.screen,
-                    (50, 0, 0),
-                    (screen_x - bar_width // 2, sprite_y - 10, bar_width, bar_height),
-                )
-                pygame.draw.rect(
-                    self.screen,
-                    (255, 0, 0),
-                    (
-                        screen_x - bar_width // 2,
-                        sprite_y - 10,
-                        bar_width * health_pct,
-                        bar_height,
-                    ),
-                )
 
     def render_crosshair(self) -> None:
         """Render crosshair in center of screen."""
         center_x = self.width // 2
         center_y = self.height // 2
 
-        # Draw cross with better visibility
+        # Draw cross
         pygame.draw.line(
             self.screen,
             (255, 255, 255),
-            (center_x - 15, center_y),
-            (center_x + 15, center_y),
-            3,
+            (center_x - 10, center_y),
+            (center_x + 10, center_y),
+            2,
         )
         pygame.draw.line(
             self.screen,
             (255, 255, 255),
-            (center_x, center_y - 15),
-            (center_x, center_y + 15),
-            3,
+            (center_x, center_y - 10),
+            (center_x, center_y + 10),
+            2,
         )
-
-        # Center dot
-        pygame.draw.circle(self.screen, (255, 0, 0), (center_x, center_y), 3)
 
     def render_sprite(
         self, x: int, y: int, image: pygame.Surface, scale: float = 1.0
@@ -293,7 +247,6 @@ class Renderer:
         bar_x, bar_y = 20, self.height - 50
         bar_width, bar_height = 200, 25
 
-        # Draw bar background
         pygame.draw.rect(
             self.screen, (40, 40, 40), (bar_x, bar_y, bar_width, bar_height)
         )
@@ -301,7 +254,7 @@ class Renderer:
             self.screen, (100, 100, 100), (bar_x, bar_y, bar_width, bar_height), 2
         )
 
-        # Health fill with color gradient
+        # Health fill
         health_percent = max(0, min(100, health)) / 100
         health_width = int(bar_width * health_percent)
 
@@ -316,12 +269,9 @@ class Renderer:
             self.screen, health_color, (bar_x, bar_y, health_width, bar_height)
         )
 
-        # Health text
+        # Text
         self.render_text(f"HP: {health}", bar_x + 100, bar_y - 15, (255, 255, 255), 20)
-
-        # Kills counter
         self.render_text(f"KILLS: {kills}", 20, 30, (255, 100, 100), 28)
 
-        # FPS
         if fps > 0:
             self.render_text(f"FPS: {fps}", self.width - 80, 20, (100, 255, 100), 18)
