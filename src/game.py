@@ -3,17 +3,16 @@ Game facade - coordinates all game components
 """
 
 import pygame
-import math
-import os
 from typing import Dict, Optional
 
 from config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, MAX_DEPTH
-from input_handler import InputHandler
+from input import InputHandler
 from renderer import Renderer
 from engine.game_engine import GameEngine
 from ui.menu import Menu, MenuItem, create_main_menu, OptionsMenu
 from ui.hud import HUD
 from ui.console import Console
+from ui.manager import UIManager
 
 
 class Game:
@@ -36,14 +35,33 @@ class Game:
         # Connect physics to renderer for line-of-sight check
         self.renderer.set_physics(self.game_engine.physics)
 
-        self.hud = HUD(SCREEN_WIDTH, SCREEN_HEIGHT)
-        self.console = Console(self.screen)
-
         # Game state
         self.running = True
-        self.current_menu = None  # None = main menu, "options" = options menu
         self.current_map = "base"  # Default map
+
+        # Create UI Manager and register components
+        self.ui_manager = UIManager()
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        """Setup UI components and register with manager."""
+        # Create HUD
+        self.hud = HUD(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.ui_manager.register("hud", self.hud)
+
+        # Create Console
+        self.console = Console(self.screen)
+        self.ui_manager.register("console", self.console)
+
+        # Create Menus
         self._create_menus()
+
+        # Register menus with manager
+        self.ui_manager.register("main_menu", self.main_menu)
+        self.ui_manager.register("options_menu", self.options_menu)
+
+        # Set initial active component
+        self.ui_manager.set_active("main_menu")
 
     def _create_menus(self) -> None:
         """Create menu system with callbacks."""
@@ -62,19 +80,21 @@ class Game:
         # Set the map before starting
         self.game_engine.state.map_manager.set_map(self.current_map)
         self.game_engine.start_game()
-        self.current_menu = None
 
     def _on_options(self) -> None:
         """Callback for options menu item."""
         # Refresh options menu with current map
         self.options_menu = OptionsMenu(self.current_map, self._on_map_changed)
-        self.current_menu = "options"
+        # Register updated options menu
+        self.ui_manager.register("options_menu", self.options_menu)
+        self.ui_manager.set_active("options_menu")
 
     def _on_map_changed(self, map_name: str) -> None:
         """Callback when map is changed in options."""
         self.current_map = map_name
         # Refresh options menu
         self.options_menu = OptionsMenu(self.current_map, self._on_map_changed)
+        self.ui_manager.register("options_menu", self.options_menu)
         print(f"Map changed to: {map_name}")
 
     def _on_map_selected(self, map_name: str) -> None:
@@ -84,9 +104,7 @@ class Game:
 
     def _on_back_from_options(self) -> None:
         """Callback to go back to main menu from options."""
-        self.current_menu = None
-        # Reset options menu to current map
-        self.options_menu = OptionsMenu(self.current_map, self._on_map_changed)
+        self.ui_manager.set_active("main_menu")
 
     def _on_quit(self) -> None:
         """Callback for quit menu item."""
@@ -115,55 +133,24 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
 
-            # Pass events to appropriate handler
+            # Pass events to UI manager first (for menus and console)
             if self.game_engine.state.game_state == "menu":
-                if self.current_menu == "options":
-                    self._handle_options_events(event)
-                else:
-                    self._handle_main_menu_events(event)
+                # Handle menu navigation
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.running = False
+                    elif event.key in (
+                        pygame.K_UP,
+                        pygame.K_DOWN,
+                        pygame.K_RETURN,
+                        pygame.K_w,
+                        pygame.K_s,
+                    ):
+                        self.ui_manager.handle_input(event)
             elif self.game_engine.state.game_state == "pause":
                 self._handle_pause_events(event)
             elif self.game_engine.state.game_state == "playing":
                 self._handle_playing_events(event)
-
-    def _handle_main_menu_events(self, event: pygame.event.Event) -> None:
-        """Handle events while in main menu."""
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                self.running = False
-            elif event.key in (
-                pygame.K_UP,
-                pygame.K_DOWN,
-                pygame.K_RETURN,
-                pygame.K_w,
-                pygame.K_s,
-            ):
-                self.main_menu.handle_input(event)
-        elif event.type == pygame.KEYUP:
-            pass
-
-    def _handle_options_events(self, event: pygame.event.Event) -> None:
-        """Handle events while in options menu."""
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                # Go back to main menu
-                self._on_back_from_options()
-            elif event.key in (
-                pygame.K_UP,
-                pygame.K_DOWN,
-                pygame.K_RETURN,
-                pygame.K_w,
-                pygame.K_s,
-            ):
-                self.options_menu.handle_input(event)
-                # Check if "Back" was selected (last item)
-                if (
-                    event.key == pygame.K_RETURN
-                    and self.options_menu.selected_index == len(self.options_menu.maps)
-                ):
-                    self._on_back_from_options()
-        elif event.type == pygame.KEYUP:
-            pass
 
     def _handle_pause_events(self, event: pygame.event.Event) -> None:
         """Handle events while paused."""
@@ -172,6 +159,11 @@ class Game:
                 self.game_engine.resume_game()
             elif event.key == pygame.K_p:
                 self.console.toggle()
+                # Update manager to track console state
+                if self.console.active:
+                    self.ui_manager.set_active("console")
+                else:
+                    self.ui_manager.set_active(None)
 
     def _handle_playing_events(self, event: pygame.event.Event) -> None:
         """Handle events while playing."""
@@ -180,6 +172,11 @@ class Game:
                 self.game_engine.pause_game()
             elif event.key == pygame.K_p:
                 self.console.toggle()
+                # Update manager to track console state
+                if self.console.active:
+                    self.ui_manager.set_active("console")
+                else:
+                    self.ui_manager.set_active("hud")
             elif event.key == pygame.K_SPACE:
                 self.game_engine.state.pending_input["Space"] = True
         elif event.type == pygame.KEYUP:
@@ -198,11 +195,8 @@ class Game:
         state = self.game_engine.state.game_state
 
         if state == "menu":
-            # Update menu animations
-            if self.current_menu == "options":
-                self.options_menu.update(dt)
-            else:
-                self.main_menu.update(dt)
+            # Update menu through UI manager
+            self.ui_manager.update(dt)
 
         elif state == "playing":
             # Pass input to game engine
@@ -222,23 +216,22 @@ class Game:
             if len(alive_enemies) == 0:
                 self.game_engine.state.game_state = "victory"
 
-        elif state == "pause":
-            # Game is paused, don't update
-            pass
+            # Update HUD data for next render
+            self.hud._last_health = self.game_engine.state.player.health
+            self.hud._last_kills = self.game_engine.state.kills
+            self.hud._last_weapon = "fists"
 
-        # Update console if active
-        if self.console.active:
-            self.console.update(input_state)
+        elif state == "pause":
+            # Game is paused, update console if active
+            pass
 
     def _render(self) -> None:
         """Render the game."""
         game_state = self.game_engine.state.game_state
 
         if game_state == "menu":
-            if self.current_menu == "options":
-                self._render_options()
-            else:
-                self._render_menu()
+            # Use UI manager to render menus
+            self.ui_manager.render(self.screen)
         elif game_state == "playing":
             self._render_playing()
         elif game_state == "pause":
@@ -250,20 +243,10 @@ class Game:
 
         # Render console on top if active
         if self.console.active:
-            self.console.render()
+            self.console.render(self.screen)
 
         # Flip display
         self.renderer.present()
-
-    def _render_menu(self) -> None:
-        """Render main menu."""
-        self.renderer.clear((0, 0, 0))
-        self.main_menu.render(self.screen)
-
-    def _render_options(self) -> None:
-        """Render options menu."""
-        self.renderer.clear((0, 0, 0))
-        self.options_menu.render(self.screen)
 
     def _render_playing(self) -> None:
         """Render the game while playing."""
@@ -295,13 +278,8 @@ class Game:
         # Render lighting effects (vignette, torch)
         self.renderer.render_lighting(player)
 
-        # Render HUD
-        self.hud.render(
-            self.screen,
-            player.health,
-            self.game_engine.state.kills,
-            "fists",
-        )
+        # Render HUD (data updated in _update)
+        self.hud.render(self.screen)
 
     def _render_pause(self) -> None:
         """Render pause screen."""

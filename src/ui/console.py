@@ -5,15 +5,17 @@ Console - debug console for console commands
 import pygame
 from typing import List, Callable, Dict
 
+from .interfaces import IUIComponent
 
-class Console:
+
+class Console(IUIComponent):
     """Debug console for entering console commands."""
 
     def __init__(self, screen: pygame.Surface):
         self.screen = screen
         self.screen_width = screen.get_width()
         self.screen_height = screen.get_height()
-        self.active = False
+        self._active = False
         self.input_text = ""
         self.output_lines: List[str] = []
         self.max_output_lines = 10
@@ -26,24 +28,65 @@ class Console:
         self.text_color = (0, 255, 0)
         self.input_color = (255, 255, 255)
 
+    @property
+    def active(self) -> bool:
+        """Check if the console is currently active."""
+        return self._active
+
+    def show(self) -> None:
+        """Show the console."""
+        self._active = True
+        self.input_text = ""
+
+    def hide(self) -> None:
+        """Hide the console."""
+        self._active = False
+
+    def update(self, dt: float) -> None:
+        """Update console state."""
+        # Console doesn't need continuous updates
+        pass
+
+    def render(self, surface: pygame.Surface) -> None:
+        """Render the console."""
+        if not self._active:
+            return
+
+        # Create semi-transparent background
+        overlay = pygame.Surface((self.screen_width, 200))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        surface.blit(overlay, (0, self.screen_height - 200))
+
+        # Render output lines
+        font = pygame.font.Font(None, 20)
+        for i, line in enumerate(self.output_lines):
+            text_surface = font.render(line, True, self.text_color)
+            surface.blit(text_surface, (10, self.screen_height - 200 + 10 + i * 20))
+
+        # Render input
+        input_surface = font.render(f"> {self.input_text}", True, self.input_color)
+        surface.blit(input_surface, (10, self.screen_height - 30))
+
     def register_command(self, name: str, callback: Callable) -> None:
         """Register a console command."""
         self.commands[name.lower()] = callback
 
     def toggle(self) -> None:
         """Toggle console visibility."""
-        self.active = not self.active
-        if self.active:
-            self.input_text = ""
+        if self._active:
+            self.hide()
+        else:
+            self.show()
 
     def handle_input(self, event: pygame.event.Event) -> bool:
         """Handle console input. Returns True if handled."""
-        if not self.active:
+        if not self._active:
             return False
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                self.active = False
+                self.hide()
                 return True
             elif event.key == pygame.K_RETURN:
                 self._execute_command()
@@ -83,27 +126,6 @@ class Console:
             self.output_lines = self.output_lines[-self.max_output_lines :]
 
         self.input_text = ""
-
-    def render(self) -> None:
-        """Render the console."""
-        if not self.active:
-            return
-
-        # Create semi-transparent background
-        overlay = pygame.Surface((self.screen_width, 200))
-        overlay.set_alpha(180)
-        overlay.fill((0, 0, 0))
-        self.screen.blit(overlay, (0, self.screen_height - 200))
-
-        # Render output lines
-        font = pygame.font.Font(None, 20)
-        for i, line in enumerate(self.output_lines):
-            text_surface = font.render(line, True, self.text_color)
-            self.screen.blit(text_surface, (10, self.screen_height - 200 + 10 + i * 20))
-
-        # Render input
-        input_surface = font.render(f"> {self.input_text}", True, self.input_color)
-        self.screen.blit(input_surface, (10, self.screen_height - 30))
 
     def add_output(self, text: str) -> None:
         """Add a line to console output."""

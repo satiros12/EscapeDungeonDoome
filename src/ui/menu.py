@@ -7,6 +7,8 @@ import time
 import os
 from typing import List, Callable, Optional
 
+from .interfaces import IUIComponent
+
 
 class MenuItem:
     """Represents a single menu item."""
@@ -17,7 +19,7 @@ class MenuItem:
         self.hover_anim = 0.0
 
 
-class Menu:
+class Menu(IUIComponent):
     """Enhanced menu system with better visuals."""
 
     def __init__(self, title: str, items: List[MenuItem]):
@@ -27,6 +29,7 @@ class Menu:
         self.font_size = 40
         self.item_spacing = 60
         self.animation_time = 0
+        self._active = True
 
         # Colors
         self.title_color = (255, 200, 50)
@@ -36,21 +39,40 @@ class Menu:
         self.background_color = (20, 15, 25)
         self.border_color = (100, 80, 60)
 
-    def handle_input(self, event: pygame.event.Event) -> None:
+    @property
+    def active(self) -> bool:
+        """Check if the menu is currently active."""
+        return self._active
+
+    def show(self) -> None:
+        """Show the menu."""
+        self._active = True
+
+    def hide(self) -> None:
+        """Hide the menu."""
+        self._active = False
+
+    def handle_input(self, event: pygame.event.Event) -> bool:
         """Handle menu input."""
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.selected_index = (self.selected_index - 1) % len(self.items)
+                return True
             elif event.key == pygame.K_DOWN:
                 self.selected_index = (self.selected_index + 1) % len(self.items)
+                return True
             elif event.key == pygame.K_RETURN:
                 item = self.items[self.selected_index]
                 if item.callback:
                     item.callback()
+                return True
             elif event.key == pygame.K_w:
                 self.selected_index = (self.selected_index - 1) % len(self.items)
+                return True
             elif event.key == pygame.K_s:
                 self.selected_index = (self.selected_index + 1) % len(self.items)
+                return True
+        return False
 
     def update(self, dt: float):
         """Update menu animations."""
@@ -230,13 +252,15 @@ class OptionsMenu(Menu):
             ]
         return ["base", "arena", "maze"]
 
-    def handle_input(self, event: pygame.event.Event) -> None:
+    def handle_input(self, event: pygame.event.Event) -> bool:
         """Handle menu input."""
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 self.selected_index = (self.selected_index - 1) % len(self.items)
+                return True
             elif event.key == pygame.K_DOWN:
                 self.selected_index = (self.selected_index + 1) % len(self.items)
+                return True
             elif event.key == pygame.K_RETURN:
                 if self.selected_index < len(self.maps):
                     # Selected a map
@@ -247,10 +271,8 @@ class OptionsMenu(Menu):
                 else:
                     # Back - do nothing, let game handle it
                     pass
-            elif event.key == pygame.K_w:
-                self.selected_index = (self.selected_index - 1) % len(self.items)
-            elif event.key == pygame.K_s:
-                self.selected_index = (self.selected_index + 1) % len(self.items)
+                return True
+        return False
 
     def render(self, screen: pygame.Surface) -> None:
         """Render options menu."""

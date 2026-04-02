@@ -1,14 +1,14 @@
-"""Tests for physics module"""
+"""Tests for physics module - using new ECS architecture"""
 
 import sys
 import os
 import math
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src/server"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
 
 import pytest
 from physics import Physics
-from game_state import GameState, GameConfig
+from engine.game_state import GameState
 
 
 class TestPhysics:
@@ -20,7 +20,9 @@ class TestPhysics:
 
     @pytest.fixture
     def physics(self, state):
-        return Physics(state)
+        grid = state.map_manager.get_current_map()["grid"]
+        physics = Physics(grid)
+        return physics
 
     @pytest.fixture
     def map_dims(self, state):
@@ -72,12 +74,12 @@ class TestPhysics:
     def test_cast_ray_returns_distance_less_than_max_depth(self, physics):
         """cast_ray should return distance less than MAX_DEPTH when wall is within range"""
         result = physics.cast_ray(math.pi / 4, 4, 4)
-        assert result["dist"] < GameConfig.MAX_DEPTH
+        assert result["dist"] < physics.max_depth
 
     def test_cast_ray_returns_wall_distance(self, physics):
         """cast_ray should return distance to wall"""
         result = physics.cast_ray(0, 1.5, 1.5)
-        assert result["dist"] < GameConfig.MAX_DEPTH
+        assert result["dist"] < physics.max_depth
 
     def test_is_wall_center_of_tile(self, physics):
         """is_wall should correctly identify wall at center of tile"""

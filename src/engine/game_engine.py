@@ -2,7 +2,6 @@
 Game Engine - Core game engine coordinating all systems
 """
 
-import pygame
 import math
 from typing import List, Optional, Dict, Any
 
@@ -26,16 +25,21 @@ from config import (
 from engine.game_state import GameState, Player, Enemy, EnemyType
 from engine.event_system import EventSystem, EventType
 from physics import Physics
+from physics.physics import IPhysics
+from engine.system_registry import SystemRegistry
 
 
 class GameEngine:
     """Core game engine that coordinates all game systems."""
 
-    def __init__(self, screen: pygame.Surface):
+    def __init__(self, screen):
         self.screen = screen
         self.state = GameState()
         self.event_system = EventSystem()
-        self.physics = Physics(self.state)
+        # Initialize physics with map grid after map is loaded
+        self.physics: IPhysics = Physics()
+        self.system_registry = SystemRegistry()
+        self.system_registry.initialize(self.state, self.physics)
         self.dt = 0.0
         self.running = True
         self.paused = False
@@ -57,6 +61,9 @@ class GameEngine:
         """Start a new game."""
         self.state.game_state = "playing"
         self.state.parse_map()
+        # Pass map to physics after loading
+        grid = self.state.map_manager.get_current_map().get("grid", [])
+        self.physics.set_map(grid)
         self.event_system.emit(EventType.GAME_START, {})
 
     def pause_game(self) -> None:
@@ -76,134 +83,10 @@ class GameEngine:
         self.dt = dt
 
         if self.state.game_state == "playing":
-            self._update_player(dt)
-            self._update_enemies(dt)
-            self._check_combat()
-            self._check_win_condition()
+            # Use systems for game logic
+            self.system_registry.update_all(dt)
+            # Raycasting for renderer (still needed)
             self._cast_rays()
-
-    def _update_player(self, dt: float) -> None:
-        """Update player position based on input."""
-        player = self.state.player
-        keys = self.state.pending_input
-
-        if player.attack_cooldown > 0:
-            player.attack_cooldown -= dt
-
-        # Movement
-        move_x = 0.0
-        move_y = 0.0
-
-        if keys.get("KeyW", False):
-            move_x += math.cos(player.angle) * PLAYER_SPEED * dt
-            move_y += math.sin(player.angle) * PLAYER_SPEED * dt
-        if keys.get("KeyS", False):
-            move_x -= math.cos(player.angle) * PLAYER_SPEED * dt
-            move_y -= math.sin(player.angle) * PLAYER_SPEED * dt
-        if keys.get("KeyA", False):
-            move_x += math.cos(player.angle - math.pi / 2) * PLAYER_SPEED * dt
-            move_y += math.sin(player.angle - math.pi / 2) * PLAYER_SPEED * dt
-        if keys.get("KeyD", False):
-            move_x += math.cos(player.angle + math.pi / 2) * PLAYER_SPEED * dt
-            move_y += math.sin(player.angle + math.pi / 2) * PLAYER_SPEED * dt
-
-        # Rotation
-        if keys.get("ArrowLeft", False):
-            player.angle -= PLAYER_ROTATION_SPEED * dt
-        if keys.get("ArrowRight", False):
-            player.angle += PLAYER_ROTATION_SPEED * dt
-
-        # Apply movement with collision check
-        new_x = player.x + move_x
-        new_y = player.y + move_y
-
-        if not self._is_wall(new_x, player.y):
-            player.x = new_x
-        if not self._is_wall(player.x, new_y):
-            player.y = new_y
-
-    def _update_enemies(self, dt: float) -> None:
-        """Update enemy positions and AI."""
-        player = self.state.player
-        alive_enemies = [
-            e for e in self.state.enemies if e.state not in ("dead", "dying")
-        ]
-
-        for enemy in alive_enemies:
-            dx = player.x - enemy.x
-            dy = player.y - enemy.y
-            dist = math.sqrt(dx * dx + dy * dy)
-
-            # Simple chase AI
-            if dist < 10:  # Detection range
-                enemy.state = "chase"
-                angle = math.atan2(dy, dx)
-                enemy.angle = angle
-
-                if dist > 1.0:
-                    move_x = math.cos(angle) * ENEMY_SPEED * dt
-                    move_y = math.sin(angle) * ENEMY_SPEED * dt
-
-                    new_x = enemy.x + move_x
-                    new_y = enemy.y + move_y
-
-                    if not self._is_wall(new_x, enemy.y):
-                        enemy.x = new_x
-                    if not self._is_wall(enemy.x, new_y):
-                        enemy.y = new_y
-
-            # Attack
-            if enemy.state == "chase" and dist <= 1.0:
-                enemy.state = "attack"
-                if enemy.attack_cooldown <= 0:
-                    enemy.attack_cooldown = 1.0
-                    if not player.god_mode:
-                        player.health -= 10
-                    if player.health <= 0:
-                        self.state.game_state = "defeat"
-                        self.event_system.emit(EventType.PLAYER_DEATH, {})
-
-            # Update attack cooldown
-            if enemy.attack_cooldown > 0:
-                enemy.attack_cooldown -= dt
-
-    def _check_combat(self) -> None:
-        """Check for combat interactions."""
-        player = self.state.player
-
-        if player.attack_cooldown > 0:
-            return
-
-        # Check if attack key was pressed
-        if self.state.pending_input.get("Space", False):
-            player.attack_cooldown = ATTACK_COOLDOWN
-
-            for enemy in self.state.enemies:
-                if enemy.state in ("dead", "dying"):
-                    continue
-
-                dx = enemy.x - player.x
-                dy = enemy.y - player.y
-                dist = math.sqrt(dx * dx + dy * dy)
-
-                if dist < ATTACK_RANGE:
-                    enemy.health -= ATTACK_DAMAGE
-                    self.event_system.emit(EventType.ENEMY_HIT, {"enemy": enemy})
-
-                    if enemy.health <= 0:
-                        enemy.state = "dying"
-                        enemy.dying_progress = 0
-                        self.state.kills += 1
-                        self.event_system.emit(EventType.ENEMY_DEATH, {"enemy": enemy})
-
-    def _check_win_condition(self) -> None:
-        """Check if player has won."""
-        alive_enemies = [
-            e for e in self.state.enemies if e.state not in ("dead", "dying")
-        ]
-        if len(alive_enemies) == 0 and self.state.game_state == "playing":
-            self.state.game_state = "victory"
-            self.event_system.emit(EventType.GAME_WIN, {})
 
     def _cast_rays(self) -> None:
         """Cast rays for raycasting rendering."""
@@ -265,9 +148,8 @@ class GameEngine:
         return self.wall_distances.copy()
 
     def attack(self) -> None:
-        """Player performs an attack."""
-        if "Space" not in self.state.pending_input:
-            self.state.pending_input["Space"] = True
+        """Player performs an attack through combat system."""
+        self.system_registry.combat_system.player_attack()
 
     def get_state(self) -> Dict[str, Any]:
         """Get current game state for serialization."""
