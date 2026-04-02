@@ -331,3 +331,200 @@ class CollidableComponent(Component):
         """
         if self._on_collision is not None:
             self._on_collision(other)
+
+
+class InventoryComponent(Component):
+    """
+    Component for entity inventory management.
+
+    This is a placeholder for the inventory system to be implemented
+    in a future feature.
+
+    Attributes:
+        capacity: Maximum number of items the inventory can hold
+        items: List of item IDs currently in the inventory
+    """
+
+    def __init__(self, capacity: int = 10):
+        super().__init__()
+        self.capacity = capacity
+        self.items: list[str] = []
+
+    def add_item(self, item_id: str) -> bool:
+        """
+        Add an item to the inventory.
+
+        Args:
+            item_id: The ID of the item to add
+
+        Returns:
+            True if item was added, False if inventory is full
+        """
+        if len(self.items) >= self.capacity:
+            return False
+        self.items.append(item_id)
+        return True
+
+    def remove_item(self, item_id: str) -> bool:
+        """
+        Remove an item from the inventory.
+
+        Args:
+            item_id: The ID of the item to remove
+
+        Returns:
+            True if item was removed, False if item not found
+        """
+        if item_id in self.items:
+            self.items.remove(item_id)
+            return True
+        return False
+
+    def get_items(self) -> list[str]:
+        """
+        Get all items in the inventory.
+
+        Returns:
+            List of item IDs
+        """
+        return self.items.copy()
+
+
+class AnimationComponent(Component):
+    """
+    Component for entity animation state.
+
+    This is a placeholder for the animation system to be implemented
+    in a future feature.
+
+    Attributes:
+        current_animation: Name of the currently playing animation
+        frame_index: Current frame in the animation
+        animation_speed: Speed multiplier for animation playback
+    """
+
+    def __init__(
+        self,
+        current_animation: str = "idle",
+        frame_index: int = 0,
+        animation_speed: float = 1.0,
+    ):
+        super().__init__()
+        self.current_animation = current_animation
+        self.frame_index = frame_index
+        self.animation_speed = animation_speed
+        self._is_playing: bool = False
+
+    def play(self) -> None:
+        """Start playing the current animation."""
+        self._is_playing = True
+
+    def stop(self) -> None:
+        """Stop playing the current animation."""
+        self._is_playing = False
+
+    def set_animation(self, animation_name: str) -> None:
+        """
+        Set a new animation to play.
+
+        Args:
+            animation_name: Name of the animation to play
+        """
+        if animation_name != self.current_animation:
+            self.current_animation = animation_name
+            self.frame_index = 0
+
+
+class VelocityComponent(Component):
+    """
+    Component for physics-based movement.
+
+    This component stores velocity information for entities that
+    use physics-based movement rather than direct position manipulation.
+
+    Attributes:
+        vx: Velocity in the X direction
+        vy: Velocity in the Y direction
+    """
+
+    def __init__(self, vx: float = 0.0, vy: float = 0.0):
+        super().__init__()
+        self.vx = vx
+        self.vy = vy
+
+    def set_velocity(self, vx: float, vy: float) -> None:
+        """
+        Set the velocity components.
+
+        Args:
+            vx: Velocity in the X direction
+            vy: Velocity in the Y direction
+        """
+        self.vx = vx
+        self.vy = vy
+
+    def get_velocity(self) -> tuple[float, float]:
+        """
+        Get the current velocity.
+
+        Returns:
+            Tuple of (vx, vy) velocity components
+        """
+        return (self.vx, self.vy)
+
+    def apply_force(self, fx: float, fy: float) -> None:
+        """
+        Apply a force to modify velocity.
+
+        Args:
+            fx: Force in the X direction
+            fy: Force in the Y direction
+        """
+        self.vx += fx
+        self.vy += fy
+
+
+class WeaponComponent(CombatComponent):
+    """
+    Component for weapon-specific combat logic.
+
+    Extends CombatComponent with weapon-specific attributes and methods.
+
+    Attributes:
+        weapon_type: Type of weapon (fists, pistol, shotgun, etc.)
+    """
+
+    def __init__(self, weapon_type: str = "fists"):
+        super().__init__(
+            attack_cooldown=0.5,
+            attack_range=1.5,
+            attack_damage=10,
+        )
+        self.weapon_type = weapon_type
+
+    def get_damage(self) -> int:
+        """
+        Get the damage dealt by this weapon.
+
+        Returns:
+            Attack damage value
+        """
+        return self.attack_damage
+
+    def get_range(self) -> float:
+        """
+        Get the attack range of this weapon.
+
+        Returns:
+            Attack range in units
+        """
+        return self.attack_range
+
+    def is_ready(self) -> bool:
+        """
+        Check if the weapon is ready to fire.
+
+        Returns:
+            True if attack cooldown is ready
+        """
+        return self.can_attack()
