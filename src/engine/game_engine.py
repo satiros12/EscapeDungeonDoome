@@ -23,8 +23,8 @@ from config import (
     RAY_COUNT,
     MAX_DEPTH,
 )
-from game_state import GameState, Player, Enemy, EnemyType, GameConfig
-from event_system import EventSystem, EventType
+from engine.game_state import GameState, Player, Enemy, EnemyType
+from engine.event_system import EventSystem, EventType
 
 
 class GameEngine:

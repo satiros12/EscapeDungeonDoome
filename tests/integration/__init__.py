@@ -1,5 +1,5 @@
 """
-Test module initialization
+Integration tests package initialization
 """
 
 import sys
