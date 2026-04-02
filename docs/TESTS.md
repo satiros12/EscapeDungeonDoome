@@ -1,11 +1,11 @@
-# Tests - WebDoom
+# Tests - WebDoom (Pygame)
 
 ## Tests Unitarios (pytest)
 
 ### Summary
-- **Total Tests**: 49
-- **Passed**: 49
-- **Failed**: 0
+- **Total Tests**: 97
+- **Passed**: 97
+- **Skipped**: 2
 
 ### Ejecución
 ```bash
@@ -13,7 +13,7 @@
 source .venv/bin/activate
 
 # Ejecutar todos los tests
-python -m pytest tests/unit/ -v
+python -m pytest tests/ -v
 
 # Ejecutar test específico
 python -m pytest tests/unit/test_physics.py -v
@@ -27,56 +27,100 @@ python -m pytest tests/unit/test_physics.py -v
 | test_ai.py | 10 | ✅ PASS |
 | test_combat.py | 13 | ✅ PASS |
 | test_systems.py | 16 | ✅ PASS |
+| test_config.py | 19 | ✅ PASS |
+| test_pathfinding.py | 13 | ✅ PASS |
+| test_game_loop.py | 8 | ✅ PASS |
+| test_gameplay.py | 12 | ✅ PASS |
 
 ---
 
-## Tests E2E (Playwright)
+## Tests de Integración
 
-### Summary
-- **Total Tests**: 16
-- **Passed**: 16
-- **Skipped**: 0
-- **Failed**: 0
+### test_game_loop.py
 
-### Ejecución
-```bash
-# Instalar playwright si es necesario
-npx playwright install chromium
+| Test Name | Status |
+|-----------|--------|
+| Game starts in menu | ✅ PASS |
+| Game starts playing | ✅ PASS |
+| Player initial position | ✅ PASS |
+| Enemies spawn from map | ✅ PASS |
+| Player can take damage | ✅ PASS |
+| Player dies at zero health | ✅ PASS |
+| Enemy can die | ✅ PASS |
+| Game can be won | ✅ PASS |
 
-# Ejecutar tests
-node tests/e2e/game.test.js
-```
+### test_gameplay.py
 
-### Tests E2E
-
-| # | Test Name | Status |
-|---|-----------|--------|
-| 1 | Menu screen loads | ✅ PASS |
-| 2 | Start button exists | ✅ PASS |
-| 3 | Clicking Start begins game | ✅ PASS |
-| 4 | Canvas is rendered | ✅ PASS |
-| 5 | Health bar is visible | ✅ PASS |
-| 6 | Player movement (WASD) works | ✅ PASS |
-| 7 | Camera rotation works | ✅ PASS |
-| 8 | Attack with spacebar works | ✅ PASS |
-| 9 | Kill counter is visible | ✅ PASS |
-| 10 | FPS counter is visible | ✅ PASS |
-| 11 | ESC pauses the game | ✅ PASS |
-| 12 | Resume button works | ✅ PASS |
-| 13 | Console opens with ALT+P | ✅ PASS |
-| 14 | Console closes with ALT+P | ✅ PASS |
-| 15 | Menu button returns to menu | ✅ PASS |
-| 16 | Game restarts correctly | ✅ PASS |
+| Test Name | Status |
+|-----------|--------|
+| Player movement forward | ✅ PASS |
+| Player movement backward | ✅ PASS |
+| Player strafe | ✅ PASS |
+| Player rotation | ✅ PASS |
+| Attack cooldown | ✅ PASS |
+| Enemy chase behavior | ✅ PASS |
+| Enemy attack | ✅ PASS |
+| Combat damage | ✅ PASS |
+| Win condition | ✅ PASS |
+| Physics collision | ✅ PASS |
+| Line of sight | ✅ PASS |
+| God mode | ✅ PASS |
 
 ---
 
 ## Coverage
 
-### Servidor
-- Physics: 100%
-- Game Logic: 90%
-- Systems (V2): 80%
+### Src Modules
+- **Physics**: 100%
+- **Game State**: 90%
+- **Systems (AI, Combat, Player)**: 85%
+- **Event System**: 80%
 
-### Cliente
-- Renderer: Testing manual
-- Game State: Testing manual
+---
+
+## Tests que fueron eliminados
+
+Los siguientes tests ya no aplican porque correspondían a la arquitectura web:
+- Tests E2E de Playwright (eliminado)
+- Tests de networking/WebSocket (eliminado)
+- Tests de cliente JavaScript (eliminado)
+
+---
+
+## Ejecución de Tests
+
+```bash
+# Todos los tests con coverage
+python -m pytest tests/ -v --cov=src --cov-report=html
+
+# Solo unit tests
+python -m pytest tests/unit/ -v
+
+# Solo integration tests
+python -m pytest tests/integration/ -v
+
+# Test de módulo específico
+python -m pytest tests/unit/test_physics.py -v
+```
+
+---
+
+## Agregar nuevos tests
+
+Para agregar tests al proyecto Pygame:
+
+```python
+# tests/unit/test_new_feature.py
+import pytest
+import sys
+import os
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
+
+from engine.game_state import GameState
+
+class TestNewFeature:
+    def test_example(self):
+        state = GameState()
+        assert state.game_state == "menu"
+```
